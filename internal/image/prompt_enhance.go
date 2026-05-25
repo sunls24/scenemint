@@ -101,11 +101,7 @@ func (c *Client) submitPromptEnhancement(
 }
 
 func (c *Client) openAIClient() *openai.OpenAI {
-	httpClient := c.rawHTTP
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
-	return openai.New(c.openAIBaseURL, c.apiKey, openai.WithClient(httpClient))
+	return openai.New(c.openAIBaseURL, c.apiKey, openai.WithClient(c.rawHTTP))
 }
 
 func (c *Client) promptConfigErrorMessage() string {

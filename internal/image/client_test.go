@@ -3,21 +3,25 @@ package image
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"scenemint/internal/quota"
 
 	"github.com/labstack/echo/v5"
 	"github.com/sunls24/gox/network/client"
 	"github.com/sunls24/gox/openai"
+	"github.com/sunls24/gox/server"
 )
 
 func TestSubmitGenerationTaskUsesJSON(t *testing.T) {
@@ -41,8 +45,7 @@ func TestSubmitGenerationTaskUsesJSON(t *testing.T) {
 		if body.ClientTaskID != "task-1" ||
 			body.Prompt != "quiet studio scene" ||
 			body.Model != "gpt-image-2" ||
-			body.Size != "1:1" ||
-			body.Image != "" {
+			body.Size != "1:1" {
 			t.Fatalf("unexpected request body: %+v", body)
 		}
 
@@ -79,6 +82,14 @@ func TestSubmitGenerationTaskUsesJSON(t *testing.T) {
 	}
 }
 
+func testReferenceUpload(data []byte) *referenceUpload {
+	return &referenceUpload{
+		Reader:      bytes.NewReader(data),
+		Filename:    "reference.png",
+		ContentType: "image/png",
+	}
+}
+
 func TestSubmitEditTaskUsesMultipartFile(t *testing.T) {
 	t.Parallel()
 
@@ -91,6 +102,12 @@ func TestSubmitEditTaskUsesMultipartFile(t *testing.T) {
 		}
 		if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data; boundary=") {
 			t.Fatalf("Content-Type = %q, want multipart/form-data", got)
+		}
+		if r.ContentLength <= 0 {
+			t.Fatalf("ContentLength = %d, want known positive length", r.ContentLength)
+		}
+		if len(r.TransferEncoding) != 0 {
+			t.Fatalf("TransferEncoding = %v, want no chunked transfer encoding", r.TransferEncoding)
 		}
 		if err := r.ParseMultipartForm(20 << 20); err != nil {
 			t.Fatalf("ParseMultipartForm: %v", err)
@@ -154,7 +171,7 @@ func TestSubmitEditTaskUsesMultipartFile(t *testing.T) {
 		Prompt:       "replace the background",
 		Model:        "gpt-image-2",
 		Size:         "1:1",
-		Image:        "data:image/png;base64,iVBORw0KGgo=",
+		imageUpload:  testReferenceUpload([]byte("\x89PNG\r\n\x1a\n")),
 	})
 	if err != nil {
 		t.Fatalf("submitEditTask returned error: %v", err)
@@ -171,6 +188,12 @@ func TestSubmitEditTaskSendsLargeReferenceImageAsFile(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data; boundary=") {
 			t.Fatalf("Content-Type = %q, want multipart/form-data", got)
+		}
+		if r.ContentLength <= 0 {
+			t.Fatalf("ContentLength = %d, want known positive length", r.ContentLength)
+		}
+		if len(r.TransferEncoding) != 0 {
+			t.Fatalf("TransferEncoding = %v, want no chunked transfer encoding", r.TransferEncoding)
 		}
 		reader, err := r.MultipartReader()
 		if err != nil {
@@ -233,10 +256,45 @@ func TestSubmitEditTaskSendsLargeReferenceImageAsFile(t *testing.T) {
 		Prompt:       "replace the background",
 		Model:        "gpt-image-2",
 		Size:         "1:1",
-		Image:        "data:image/png;base64," + base64.StdEncoding.EncodeToString(largeImage),
+		imageUpload:  testReferenceUpload(largeImage),
 	})
 	if err != nil {
 		t.Fatalf("submitEditTask returned error: %v", err)
+	}
+}
+
+func TestSubmitEditTaskRequiresReferenceUpload(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body taskSubmitRequest
+	}{
+		{
+			name: "missing upload",
+			body: taskSubmitRequest{},
+		},
+		{
+			name: "nil reader",
+			body: taskSubmitRequest{
+				imageUpload: &referenceUpload{
+					Filename:    "reference.png",
+					ContentType: "image/png",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := (&Client{}).submitEditTask(context.Background(), tt.body)
+			if err == nil {
+				t.Fatal("submitEditTask returned nil error")
+			}
+			if got := err.Error(); !strings.Contains(got, "参考图不能为空") {
+				t.Fatalf("error = %q, want reference upload message", got)
+			}
+		})
 	}
 }
 
@@ -258,7 +316,7 @@ func TestSubmitEditTaskReturnsUpstreamErrorBody(t *testing.T) {
 	_, err := c.submitEditTask(context.Background(), taskSubmitRequest{
 		ClientTaskID: "task-1",
 		Prompt:       "replace the background",
-		Image:        "data:image/png;base64,iVBORw0KGgo=",
+		imageUpload:  testReferenceUpload([]byte("\x89PNG\r\n\x1a\n")),
 	})
 	if err == nil {
 		t.Fatal("submitEditTask returned nil error")
@@ -330,6 +388,450 @@ func TestGenerateSpendsCreditAfterSuccessfulSubmit(t *testing.T) {
 	}
 	if status.Balance != quota.DailyGrant-1 {
 		t.Fatalf("quota balance = %d, want %d", status.Balance, quota.DailyGrant-1)
+	}
+}
+
+const (
+	testGenerateHTTPFingerprint     = "fingerprint123"
+	testGenerateHTTPPrompt          = "replace the background"
+	testGenerateHTTPSize            = "1:1"
+	testGenerateHTTPModel           = "gpt-image-2"
+	testGenerateHTTPReferenceName   = "reference.png"
+	testGenerateHTTPReferenceType   = "image/png"
+	testGenerateHTTPGenerationsPath = "/api/image-tasks/generations"
+	testGenerateHTTPEditsPath       = "/api/image-tasks/edits"
+	testGenerateHTTPGeneratePath    = "/api/images/generate"
+	testGenerateHTTPAuthorization   = "Bearer test-key"
+	testGenerateHTTPReferenceBytes  = "\x89PNG\r\n\x1a\n"
+)
+
+func newGenerateHTTPQuotaStore(t *testing.T) *quota.Store {
+	t.Helper()
+	store := newQuotaStore(t)
+	if _, err := store.ApplyCheckIn(testGenerateHTTPFingerprint); err != nil {
+		t.Fatalf("ApplyCheckIn returned error: %v", err)
+	}
+	return store
+}
+
+func newGenerateHTTPTestClient(store *quota.Store, ts *httptest.Server) *Client {
+	return &Client{
+		openAIBaseURL: ts.URL + "/v1",
+		taskAPIRoot:   ts.URL,
+		apiKey:        "test-key",
+		model:         testGenerateHTTPModel,
+		quota:         store,
+		http:          client.New(client.WithClient(ts.Client())),
+		rawHTTP:       ts.Client(),
+	}
+}
+
+func newJSONGenerateRequest(t *testing.T) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	err := json.NewEncoder(&body).Encode(GenerateRequest{
+		Prompt:      testGenerateHTTPPrompt,
+		Size:        testGenerateHTTPSize,
+		Fingerprint: testGenerateHTTPFingerprint,
+	})
+	if err != nil {
+		t.Fatalf("Encode JSON request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, testGenerateHTTPGeneratePath, &body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	return req
+}
+
+func newMultipartGenerateRequest(t *testing.T, imageBytes []byte) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fields := [][2]string{
+		{"prompt", testGenerateHTTPPrompt},
+		{"size", testGenerateHTTPSize},
+		{"fingerprint", testGenerateHTTPFingerprint},
+	}
+	for _, field := range fields {
+		if err := writer.WriteField(field[0], field[1]); err != nil {
+			t.Fatalf("WriteField %s: %v", field[0], err)
+		}
+	}
+	partHeader := make(textproto.MIMEHeader)
+	partHeader.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{
+		"name":     "image",
+		"filename": testGenerateHTTPReferenceName,
+	}))
+	partHeader.Set("Content-Type", testGenerateHTTPReferenceType)
+	part, err := writer.CreatePart(partHeader)
+	if err != nil {
+		t.Fatalf("CreateFormFile: %v", err)
+	}
+	if _, err := part.Write(imageBytes); err != nil {
+		t.Fatalf("Write image: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, testGenerateHTTPGeneratePath, &body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	return req
+}
+
+func serveGenerateHTTP(t *testing.T, c *Client, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+	srv := server.New(func(srv *server.Server) {
+		srv.Echo.POST(testGenerateHTTPGeneratePath, server.WrapReplyResp(c.GenerateReply))
+	})
+	rec := httptest.NewRecorder()
+	srv.Echo.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestGenerateHTTPAcceptsJSONTextGeneration(t *testing.T) {
+	t.Parallel()
+
+	store := newGenerateHTTPQuotaStore(t)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != testGenerateHTTPGenerationsPath {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != testGenerateHTTPAuthorization {
+			t.Fatalf("Authorization = %q, want %q", got, testGenerateHTTPAuthorization)
+		}
+		if got := r.Header.Get("Content-Type"); got != echo.MIMEApplicationJSON {
+			t.Fatalf("Content-Type = %q, want %q", got, echo.MIMEApplicationJSON)
+		}
+
+		var body taskSubmitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("Decode request body: %v", err)
+		}
+		if body.ClientTaskID == "" {
+			t.Fatal("client_task_id is empty")
+		}
+		if body.Prompt != testGenerateHTTPPrompt ||
+			body.Model != testGenerateHTTPModel ||
+			body.Size != testGenerateHTTPSize {
+			t.Fatalf("unexpected request body: %+v", body)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(upstreamTask{
+			ID:     "task-1",
+			Status: "queued",
+			Mode:   "generation",
+			Model:  testGenerateHTTPModel,
+			Size:   testGenerateHTTPSize,
+		}); err != nil {
+			t.Fatalf("Encode: %v", err)
+		}
+	}))
+	defer ts.Close()
+
+	c := newGenerateHTTPTestClient(store, ts)
+	rec := serveGenerateHTTP(t, c, newJSONGenerateRequest(t))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var env struct {
+		Code int              `json:"code"`
+		Data GenerateResponse `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&env); err != nil {
+		t.Fatalf("Decode response: %v", err)
+	}
+	if env.Code != 0 {
+		t.Fatalf("response code = %d, want 0", env.Code)
+	}
+	if env.Data.Mode != "text" || env.Data.Status != "queued" {
+		t.Fatalf("unexpected response data: %+v", env.Data)
+	}
+	if env.Data.RemainingCredits == nil || *env.Data.RemainingCredits != quota.DailyGrant-1 {
+		t.Fatalf("RemainingCredits = %v, want %d", env.Data.RemainingCredits, quota.DailyGrant-1)
+	}
+}
+
+func TestGenerateHTTPFallsBackToSubmittedTaskFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		request  func(t *testing.T) *http.Request
+		path     string
+		wantMode string
+	}{
+		{
+			name:     "json text generation",
+			request:  newJSONGenerateRequest,
+			path:     testGenerateHTTPGenerationsPath,
+			wantMode: "text",
+		},
+		{
+			name: "multipart reference image",
+			request: func(t *testing.T) *http.Request {
+				t.Helper()
+				return newMultipartGenerateRequest(t, []byte(testGenerateHTTPReferenceBytes))
+			},
+			path:     testGenerateHTTPEditsPath,
+			wantMode: "image",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := newGenerateHTTPQuotaStore(t)
+			submittedIDs := make(chan string, 1)
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path {
+					t.Fatalf("unexpected path %q", r.URL.Path)
+				}
+
+				var submittedID string
+				if tt.path == testGenerateHTTPGenerationsPath {
+					var body taskSubmitRequest
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Fatalf("Decode request body: %v", err)
+					}
+					submittedID = body.ClientTaskID
+				} else {
+					if err := r.ParseMultipartForm(20 << 20); err != nil {
+						t.Fatalf("ParseMultipartForm: %v", err)
+					}
+					submittedID = r.FormValue("client_task_id")
+				}
+				if strings.TrimSpace(submittedID) == "" {
+					t.Fatal("client_task_id is empty")
+				}
+				submittedIDs <- submittedID
+
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(upstreamTask{
+					Status: "queued",
+				}); err != nil {
+					t.Fatalf("Encode: %v", err)
+				}
+			}))
+			defer ts.Close()
+
+			c := newGenerateHTTPTestClient(store, ts)
+			rec := serveGenerateHTTP(t, c, tt.request(t))
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			var env struct {
+				Code int              `json:"code"`
+				Data GenerateResponse `json:"data"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&env); err != nil {
+				t.Fatalf("Decode response: %v", err)
+			}
+			if env.Code != 0 {
+				t.Fatalf("response code = %d, want 0", env.Code)
+			}
+
+			var submittedID string
+			select {
+			case submittedID = <-submittedIDs:
+			case <-time.After(time.Second):
+				t.Fatal("upstream did not receive submitted task id")
+			}
+			if env.Data.ID != submittedID {
+				t.Fatalf("response id = %q, want submitted client_task_id %q", env.Data.ID, submittedID)
+			}
+			if env.Data.Mode != tt.wantMode {
+				t.Fatalf("response mode = %q, want %q", env.Data.Mode, tt.wantMode)
+			}
+			if env.Data.Size != testGenerateHTTPSize {
+				t.Fatalf("response size = %q, want %q", env.Data.Size, testGenerateHTTPSize)
+			}
+			if _, err := time.Parse(time.RFC3339, env.Data.CreatedAt); err != nil {
+				t.Fatalf("response createdAt = %q, want RFC3339: %v", env.Data.CreatedAt, err)
+			}
+		})
+	}
+}
+
+func TestGenerateHTTPAcceptsMultipartReferenceImage(t *testing.T) {
+	t.Parallel()
+
+	store := newGenerateHTTPQuotaStore(t)
+	imageBytes := []byte(testGenerateHTTPReferenceBytes)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != testGenerateHTTPEditsPath {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != testGenerateHTTPAuthorization {
+			t.Fatalf("Authorization = %q, want %q", got, testGenerateHTTPAuthorization)
+		}
+		if got := r.Header.Get("Content-Type"); !strings.HasPrefix(got, "multipart/form-data; boundary=") {
+			t.Fatalf("Content-Type = %q, want multipart/form-data", got)
+		}
+		if err := r.ParseMultipartForm(20 << 20); err != nil {
+			t.Fatalf("ParseMultipartForm: %v", err)
+		}
+		if got := r.FormValue("client_task_id"); strings.TrimSpace(got) == "" {
+			t.Fatal("client_task_id is empty")
+		}
+		wantFields := map[string]string{
+			"prompt": testGenerateHTTPPrompt,
+			"model":  testGenerateHTTPModel,
+			"size":   testGenerateHTTPSize,
+		}
+		for name, want := range wantFields {
+			if got := r.FormValue(name); got != want {
+				t.Fatalf("%s = %q, want %q", name, got, want)
+			}
+		}
+		files := r.MultipartForm.File["image"]
+		if len(files) != 1 {
+			t.Fatalf("image files = %d, want 1", len(files))
+		}
+		if got := files[0].Filename; got != testGenerateHTTPReferenceName {
+			t.Fatalf("image filename = %q, want %q", got, testGenerateHTTPReferenceName)
+		}
+		if got := files[0].Header.Get("Content-Type"); got != testGenerateHTTPReferenceType {
+			t.Fatalf("image Content-Type = %q, want %q", got, testGenerateHTTPReferenceType)
+		}
+		file, err := files[0].Open()
+		if err != nil {
+			t.Fatalf("Open image file: %v", err)
+		}
+		defer file.Close()
+		data, err := io.ReadAll(file)
+		if err != nil {
+			t.Fatalf("Read image file: %v", err)
+		}
+		if !bytes.Equal(data, imageBytes) {
+			t.Fatalf("image bytes = %q, want %q", data, imageBytes)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(upstreamTask{
+			ID:     "task-1",
+			Status: "queued",
+			Mode:   "edit",
+			Model:  testGenerateHTTPModel,
+			Size:   testGenerateHTTPSize,
+		}); err != nil {
+			t.Fatalf("Encode: %v", err)
+		}
+	}))
+	defer ts.Close()
+
+	c := newGenerateHTTPTestClient(store, ts)
+	rec := serveGenerateHTTP(t, c, newMultipartGenerateRequest(t, imageBytes))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var env struct {
+		Code int              `json:"code"`
+		Data GenerateResponse `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&env); err != nil {
+		t.Fatalf("Decode response: %v", err)
+	}
+	if env.Code != 0 {
+		t.Fatalf("response code = %d, want 0", env.Code)
+	}
+	if env.Data.Mode != "image" || env.Data.Status != "queued" {
+		t.Fatalf("unexpected response data: %+v", env.Data)
+	}
+	if env.Data.RemainingCredits == nil || *env.Data.RemainingCredits != quota.DailyGrant-1 {
+		t.Fatalf("RemainingCredits = %v, want %d", env.Data.RemainingCredits, quota.DailyGrant-1)
+	}
+}
+
+func TestGenerateHTTPRejectsInvalidMultipartReferenceImage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		imageBytes []byte
+		want       string
+	}{
+		{
+			name:       "empty image",
+			imageBytes: []byte{},
+			want:       "参考图不能为空",
+		},
+		{
+			name:       "oversized image",
+			imageBytes: bytes.Repeat([]byte{0xab}, maxReferenceUploadBytes+1),
+			want:       "参考图不能超过 10MB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serveGenerateHTTP(
+				t,
+				&Client{},
+				newMultipartGenerateRequest(t, tt.imageBytes),
+			)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			var env struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&env); err != nil {
+				t.Fatalf("Decode response: %v", err)
+			}
+			if env.Code == 0 || !strings.Contains(env.Message, tt.want) {
+				t.Fatalf("unexpected response envelope: %+v, want message containing %q", env, tt.want)
+			}
+		})
+	}
+}
+
+func TestGenerateHTTPRefundsCreditWhenMultipartSubmitFails(t *testing.T) {
+	t.Parallel()
+
+	store := newGenerateHTTPQuotaStore(t)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != testGenerateHTTPEditsPath {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		http.Error(w, `{"detail":"upstream down"}`, http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	c := newGenerateHTTPTestClient(store, ts)
+	rec := serveGenerateHTTP(
+		t,
+		c,
+		newMultipartGenerateRequest(t, []byte(testGenerateHTTPReferenceBytes)),
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var env struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&env); err != nil {
+		t.Fatalf("Decode response: %v", err)
+	}
+	if env.Code == 0 || !strings.Contains(env.Message, "图片任务提交失败") {
+		t.Fatalf("unexpected response envelope: %+v", env)
+	}
+
+	status, err := store.Get(testGenerateHTTPFingerprint)
+	if err != nil {
+		t.Fatalf("quota Get returned error: %v", err)
+	}
+	if status.Balance != quota.DailyGrant {
+		t.Fatalf("quota balance = %d, want refunded balance %d", status.Balance, quota.DailyGrant)
 	}
 }
 

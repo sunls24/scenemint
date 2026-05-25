@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 
 import {
   removeHistory,
@@ -11,7 +11,6 @@ import { getJSON } from "@/lib/http"
 import {
   isActive,
   mergeTask,
-  statusOf,
   type TaskResponse,
 } from "./utils"
 
@@ -19,6 +18,10 @@ export function useTaskPolling(
   currentTask: ImageHistory | null,
   history: ImageHistory[]
 ) {
+  const latestItemsRef = useRef<{
+    currentTask: ImageHistory | null
+    history: ImageHistory[]
+  }>({ currentTask, history })
   const activeItems = useMemo(() => {
     const items: ImageHistory[] = []
     if (currentTask && isActive(currentTask)) {
@@ -33,8 +36,12 @@ export function useTaskPolling(
   }, [currentTask, history])
 
   const activeSignature = activeItems
-    .map((item) => `${item.id}:${statusOf(item)}:${item.updatedAt ?? ""}`)
+    .map((item) => item.id)
     .join("|")
+
+  useEffect(() => {
+    latestItemsRef.current = { currentTask, history }
+  }, [currentTask, history])
 
   useEffect(() => {
     if (currentTask) {
@@ -49,34 +56,52 @@ export function useTaskPolling(
   }, [currentTask, history])
 
   useEffect(() => {
-    if (activeItems.length === 0) {
+    if (!activeSignature) {
       return
     }
 
     let disposed = false
+    let timer = 0
+    const activeIds = activeSignature.split("|")
+    const latestItem = (id: string) => {
+      const latest = latestItemsRef.current
+      if (latest.currentTask?.id === id) {
+        return latest.currentTask
+      }
+      return latest.history.find((item) => item.id === id)
+    }
+
     async function poll() {
       await Promise.all(
-        activeItems.map(async (item) => {
+        activeIds.map(async (id) => {
           try {
             const task = await getJSON<TaskResponse>(
-              `/api/images/tasks/${encodeURIComponent(item.id)}`
+              `/api/images/tasks/${encodeURIComponent(id)}`
             )
             if (disposed) {
               return
             }
-            updateTask(item.id, mergeTask(item, task))
+            const item = latestItem(id)
+            if (!item || !isActive(item)) {
+              return
+            }
+            updateTask(id, mergeTask(item, task))
           } catch {
             // Keep active tasks pending on transient network/server errors.
           }
         })
       )
+      if (!disposed) {
+        timer = window.setTimeout(() => void poll(), 2000)
+      }
     }
 
     void poll()
-    const timer = window.setInterval(() => void poll(), 3000)
     return () => {
       disposed = true
-      window.clearInterval(timer)
+      if (timer) {
+        window.clearTimeout(timer)
+      }
     }
   }, [activeSignature])
 }

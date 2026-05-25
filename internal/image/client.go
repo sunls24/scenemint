@@ -20,6 +20,12 @@ import (
 	"github.com/sunls24/gox/server"
 )
 
+const (
+	maxMultipartMemory       = 1 << 20
+	maxReferenceUploadBytes  = 10 << 20
+	maxReferenceUploadSizeMB = 10
+)
+
 type Client struct {
 	openAIBaseURL string
 	taskAPIRoot   string
@@ -32,10 +38,10 @@ type Client struct {
 }
 
 type GenerateRequest struct {
-	Prompt         string `json:"prompt"`
-	Size           string `json:"size"`
-	ReferenceImage string `json:"referenceImage"`
-	Fingerprint    string `json:"fingerprint"`
+	Prompt          string `json:"prompt"`
+	Size            string `json:"size"`
+	Fingerprint     string `json:"fingerprint"`
+	referenceUpload *referenceUpload
 }
 
 type GenerateResponse struct {
@@ -52,8 +58,15 @@ type GenerateResponse struct {
 	RemainingCredits *int   `json:"remainingCredits,omitempty"`
 }
 
+type referenceUpload struct {
+	Reader      io.Reader
+	Filename    string
+	ContentType string
+}
+
 func NewClient(cfg *config.Config, quotaStore *quota.Store) *Client {
 	baseURL := strings.TrimSpace(cfg.ChatGPT2API.BaseURL)
+	httpClient := newHTTPClient()
 	return &Client{
 		openAIBaseURL: normalizeOpenAIBaseURL(baseURL),
 		taskAPIRoot:   normalizeTaskAPIRoot(baseURL),
@@ -61,9 +74,95 @@ func NewClient(cfg *config.Config, quotaStore *quota.Store) *Client {
 		model:         strings.TrimSpace(cfg.ChatGPT2API.ImageModel),
 		promptModel:   strings.TrimSpace(cfg.ChatGPT2API.PromptModel),
 		quota:         quotaStore,
-		http:          client.New(),
-		rawHTTP:       &http.Client{Timeout: 10 * time.Minute},
+		http:          client.New(client.WithClient(httpClient)),
+		rawHTTP:       httpClient,
 	}
+}
+
+func newHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 100
+	transport.MaxIdleConnsPerHost = 20
+	transport.MaxConnsPerHost = 50
+	return &http.Client{
+		Timeout:   10 * time.Minute,
+		Transport: transport,
+	}
+}
+
+func (c *Client) GenerateReply(ctx context.Context) (*server.Reply, error) {
+	ec := server.EchoContext(ctx)
+	req, cleanup, err := bindGenerateRequest(ec)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.Generate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return server.OK(resp), nil
+}
+
+func bindGenerateRequest(ec *echo.Context) (GenerateRequest, func(), error) {
+	contentType := strings.ToLower(strings.TrimSpace(ec.Request().Header.Get(echo.HeaderContentType)))
+	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		var req GenerateRequest
+		if err := ec.Bind(&req); err != nil {
+			return GenerateRequest{}, nil, server.BadParam()
+		}
+		return req, nil, nil
+	}
+	return bindMultipartGenerateRequest(ec)
+}
+
+func bindMultipartGenerateRequest(ec *echo.Context) (GenerateRequest, func(), error) {
+	httpReq := ec.Request()
+	if err := httpReq.ParseMultipartForm(maxMultipartMemory); err != nil {
+		return GenerateRequest{}, nil, server.BadParam().WithErr(err)
+	}
+	cleanup := func() { _ = httpReq.MultipartForm.RemoveAll() }
+
+	req := GenerateRequest{
+		Prompt:      httpReq.FormValue("prompt"),
+		Size:        httpReq.FormValue("size"),
+		Fingerprint: httpReq.FormValue("fingerprint"),
+	}
+
+	if len(httpReq.MultipartForm.File["image"]) == 0 {
+		return req, cleanup, nil
+	}
+	fileHeader := httpReq.MultipartForm.File["image"][0]
+	if fileHeader.Size <= 0 {
+		return GenerateRequest{}, cleanup, server.ErrMsg("参考图不能为空")
+	}
+	if fileHeader.Size > maxReferenceUploadBytes {
+		return GenerateRequest{}, cleanup, server.ErrMsgf("参考图不能超过 %dMB", maxReferenceUploadSizeMB)
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		cleanup()
+		return GenerateRequest{}, nil, server.ErrMsg("参考图读取失败").WithErr(err)
+	}
+	cleanup = func() {
+		_ = file.Close()
+		_ = httpReq.MultipartForm.RemoveAll()
+	}
+
+	contentType := strings.TrimSpace(fileHeader.Header.Get(echo.HeaderContentType))
+	if !strings.HasPrefix(strings.ToLower(contentType), "image/") {
+		cleanup()
+		return GenerateRequest{}, nil, server.ErrMsg("参考图必须是图片")
+	}
+	req.referenceUpload = &referenceUpload{
+		Reader:      file,
+		Filename:    fileHeader.Filename,
+		ContentType: contentType,
+	}
+	return req, cleanup, nil
 }
 
 func (c *Client) Generate(ctx context.Context, req GenerateRequest) (GenerateResponse, error) {
@@ -92,7 +191,7 @@ func (c *Client) Generate(ctx context.Context, req GenerateRequest) (GenerateRes
 
 	mode := "text"
 	var task upstreamTask
-	if strings.TrimSpace(req.ReferenceImage) == "" {
+	if req.referenceUpload == nil {
 		task, err = c.submitGenerationTask(ctx, taskSubmitRequest{
 			ClientTaskID: id,
 			Prompt:       prompt,
@@ -106,7 +205,7 @@ func (c *Client) Generate(ctx context.Context, req GenerateRequest) (GenerateRes
 			Prompt:       prompt,
 			Model:        c.model,
 			Size:         normalized.Size,
-			Image:        req.ReferenceImage,
+			imageUpload:  req.referenceUpload,
 		})
 	}
 	if err != nil {

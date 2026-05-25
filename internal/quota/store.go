@@ -220,12 +220,6 @@ func readAccount(b *bbolt.Bucket, fingerprint string) (account, bool, error) {
 	if err := json.Unmarshal(raw, &acct); err != nil {
 		return account{}, false, fmt.Errorf("decoding quota account: %w", err)
 	}
-	if acct.Balance < 0 {
-		acct.Balance = 0
-	}
-	if acct.Balance > BalanceCap {
-		acct.Balance = BalanceCap
-	}
 	return acct, true, nil
 }
 

@@ -3,7 +3,6 @@ package image
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,7 +21,7 @@ type taskSubmitRequest struct {
 	Prompt       string `json:"prompt"`
 	Model        string `json:"model"`
 	Size         string `json:"size,omitempty"`
-	Image        string `json:"image,omitempty"`
+	imageUpload  *referenceUpload
 }
 
 type upstreamTaskList struct {
@@ -61,41 +60,14 @@ func (c *Client) submitGenerationTask(ctx context.Context, body taskSubmitReques
 }
 
 func (c *Client) submitEditTask(ctx context.Context, body taskSubmitRequest) (upstreamTask, error) {
-	imageData, imageType, err := decodeDataURLImage(body.Image)
+	upload, err := editReferenceUpload(body)
 	if err != nil {
 		return upstreamTask{}, err
 	}
 
 	var form bytes.Buffer
 	writer := multipart.NewWriter(&form)
-	fields := map[string]string{
-		"client_task_id": body.ClientTaskID,
-		"prompt":         body.Prompt,
-		"model":          body.Model,
-		"size":           body.Size,
-	}
-	for name, value := range fields {
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
-		if err := writer.WriteField(name, value); err != nil {
-			_ = writer.Close()
-			return upstreamTask{}, err
-		}
-	}
-
-	partHeader := make(textproto.MIMEHeader)
-	partHeader.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{
-		"name":     "image",
-		"filename": "reference." + imageExtension(imageType),
-	}))
-	partHeader.Set("Content-Type", imageType)
-	part, err := writer.CreatePart(partHeader)
-	if err != nil {
-		_ = writer.Close()
-		return upstreamTask{}, err
-	}
-	if _, err := part.Write(imageData); err != nil {
+	if err := writeEditMultipart(writer, body, upload); err != nil {
 		_ = writer.Close()
 		return upstreamTask{}, err
 	}
@@ -121,47 +93,56 @@ func (c *Client) submitEditTask(ctx context.Context, body taskSubmitRequest) (up
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return upstreamTask{}, err
+	data, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return upstreamTask{}, readErr
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if len(data) == 0 {
-			return upstreamTask{}, fmt.Errorf("%s", resp.Status)
-		}
-		return upstreamTask{}, fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(data)))
+		return upstreamTask{}, upstreamStatusError(resp.Status, data)
 	}
 	return decodeTask(data)
 }
 
-func decodeDataURLImage(value string) ([]byte, string, error) {
-	header, payload, ok := strings.Cut(strings.TrimSpace(value), ",")
-	if !ok || !strings.HasPrefix(strings.ToLower(header), "data:") {
-		return nil, "", fmt.Errorf("参考图格式不正确")
-	}
-	imageType := strings.TrimSpace(strings.TrimPrefix(strings.Split(header, ";")[0], "data:"))
-	if !strings.HasPrefix(strings.ToLower(imageType), "image/") {
-		return nil, "", fmt.Errorf("参考图必须是图片")
-	}
-	data, err := base64.StdEncoding.DecodeString(payload)
-	if err != nil {
-		return nil, "", fmt.Errorf("参考图格式不正确: %w", err)
-	}
+func upstreamStatusError(status string, data []byte) error {
 	if len(data) == 0 {
-		return nil, "", fmt.Errorf("参考图不能为空")
+		return fmt.Errorf("%s", status)
 	}
-	return data, imageType, nil
+	return fmt.Errorf("%s: %s", status, strings.TrimSpace(string(data)))
 }
 
-func imageExtension(imageType string) string {
-	switch strings.ToLower(imageType) {
-	case "image/jpeg", "image/jpg":
-		return "jpg"
-	case "image/webp":
-		return "webp"
-	default:
-		return "png"
+func editReferenceUpload(body taskSubmitRequest) (referenceUpload, error) {
+	if body.imageUpload == nil || body.imageUpload.Reader == nil {
+		return referenceUpload{}, fmt.Errorf("参考图不能为空")
 	}
+	return *body.imageUpload, nil
+}
+
+func writeEditMultipart(writer *multipart.Writer, body taskSubmitRequest, upload referenceUpload) error {
+	if err := writer.WriteField("client_task_id", body.ClientTaskID); err != nil {
+		return err
+	}
+	if err := writer.WriteField("prompt", body.Prompt); err != nil {
+		return err
+	}
+	if err := writer.WriteField("model", body.Model); err != nil {
+		return err
+	}
+	if err := writer.WriteField("size", body.Size); err != nil {
+		return err
+	}
+
+	partHeader := make(textproto.MIMEHeader)
+	partHeader.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{
+		"name":     "image",
+		"filename": upload.Filename,
+	}))
+	partHeader.Set("Content-Type", upload.ContentType)
+	part, err := writer.CreatePart(partHeader)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, upload.Reader)
+	return err
 }
 
 func decodeTask(data []byte) (upstreamTask, error) {

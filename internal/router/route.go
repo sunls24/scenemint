@@ -20,7 +20,7 @@ func Register(e *echo.Echo, imageClient *image.Client, quotaStore *quota.Store, 
 	g.POST("/quota/status", server.Wrap(quotaStore.Status), security.BodyLimit(), sec.CSRF())
 	g.POST("/quota/check-in", server.Wrap(quotaStore.CheckIn), security.BodyLimit(), sec.CSRF())
 	g.POST("/prompts/enhance", imageClient.EnhancePrompt, security.BodyLimit(), sec.CSRF())
-	g.POST("/images/generate", server.Wrap(imageClient.Generate), security.BodyLimit(), sec.CSRF())
+	g.POST("/images/generate", server.WrapReplyResp(imageClient.GenerateReply), security.BodyLimit(), sec.CSRF())
 	g.GET("/images/tasks/:id", server.WrapResp(imageClient.Task))
 	g.GET("/images/tasks/:id/image", imageClient.ProxyImage)
 }

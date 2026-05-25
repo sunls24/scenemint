@@ -78,6 +78,12 @@ export async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return dataOrThrow(resp, payload)
 }
 
+export async function postForm<T>(path: string, body: FormData): Promise<T> {
+  const resp = await postWithCSRF(path, body)
+  const payload = await readEnvelope<T>(resp)
+  return dataOrThrow(resp, payload)
+}
+
 export async function postStream(
   path: string,
   body: unknown,
@@ -98,18 +104,23 @@ export async function postStream(
 
 async function postWithCSRF(
   path: string,
-  body: unknown,
+  body: unknown | FormData,
   options: PostOptions = {}
 ): Promise<Response> {
   const token = await fetchCSRFToken(options.refreshed)
+  const formBody = body instanceof FormData
+  const headers: Record<string, string> = {
+    "X-CSRF-Token": token,
+  }
+  if (!formBody) {
+    headers["Content-Type"] = "application/json"
+  }
+
   const resp = await fetch(path, {
     method: "POST",
     credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRF-Token": token,
-    },
-    body: JSON.stringify(body),
+    headers,
+    body: formBody ? body : JSON.stringify(body),
     signal: options.signal,
   })
 

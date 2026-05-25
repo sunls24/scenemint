@@ -205,4 +205,4 @@ export type ImageGeneratorCopy = (typeof copy)[Language]
 export const enhanceDirectionValues = ["details", "creative"] as const
 export type EnhanceDirection = (typeof enhanceDirectionValues)[number]
 
-export const sizeValues = ["9:16", "16:9", "1:1"] as const
+export const sizeValues = ["1:1", "16:9", "9:16"] as const

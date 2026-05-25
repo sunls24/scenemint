@@ -8,8 +8,8 @@ import {
   type Language,
 } from "./copy"
 
-export const defaultLanguage: Language = "en"
-export const defaultSize = "9:16"
+export const defaultLanguage: Language = "zh"
+export const defaultSize = "1:1"
 export const defaultEnhanceDirection: EnhanceDirection = "details"
 
 function isLanguage(value: string | null): value is Language {
@@ -30,31 +30,29 @@ function readPreference(key: string) {
   if (typeof window === "undefined") {
     return null
   }
-  try {
-    return window.localStorage.getItem(key)
-  } catch {
-    return null
-  }
+  return window.localStorage.getItem(key)
 }
 
 function writePreference(key: string, value: string) {
   if (typeof window === "undefined") {
     return
   }
-  try {
-    window.localStorage.setItem(key, value)
-  } catch {
-    // Preference persistence is optional; keep the app usable if storage is blocked.
-  }
+  window.localStorage.setItem(key, value)
 }
 
 function browserLanguage(): Language {
   if (typeof window === "undefined") {
     return defaultLanguage
   }
-  return window.navigator.language.toLowerCase().startsWith("zh")
-    ? "zh"
-    : defaultLanguage
+  const languages = [
+    ...(window.navigator.languages ?? []),
+    window.navigator.language,
+  ]
+  const language = languages.find((value) => value.trim() !== "")
+  if (!language) {
+    return defaultLanguage
+  }
+  return language.toLowerCase().startsWith("zh") ? "zh" : "en"
 }
 
 export function initialLanguage(): Language {
@@ -96,17 +94,15 @@ export const languageBootScript = `
   const defaultLanguage = ${JSON.stringify(defaultLanguage)}
   const languageStorageKey = ${JSON.stringify(languageStorageKey)}
   const documentLanguage = (language) => language === "zh" ? "zh-CN" : "en"
-  try {
-    const stored = window.localStorage.getItem(languageStorageKey)
+  const browserLanguage = () => {
     const language =
-      stored === "zh" || stored === "en"
-        ? stored
-        : window.navigator.language.toLowerCase().startsWith("zh")
-          ? "zh"
-          : defaultLanguage
-    document.documentElement.lang = documentLanguage(language)
-  } catch {
-    document.documentElement.lang = documentLanguage(defaultLanguage)
+      window.navigator.languages?.find((value) => value.trim() !== "") ||
+      window.navigator.language ||
+      defaultLanguage
+    return language.toLowerCase().startsWith("zh") ? "zh" : "en"
   }
+  const stored = window.localStorage.getItem(languageStorageKey)
+  const language = stored === "zh" || stored === "en" ? stored : browserLanguage()
+  document.documentElement.lang = documentLanguage(language)
 })()
 `.trim()

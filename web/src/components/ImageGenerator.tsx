@@ -24,7 +24,6 @@ import { QuotaPanel } from "@/components/image-generator/QuotaPanel"
 import {
   canPreview,
   isActive,
-  readFile,
   type PreviewImage,
   type TaskResponse,
 } from "@/components/image-generator/utils"
@@ -46,7 +45,7 @@ import {
   removeHistory,
   type ImageHistory,
 } from "@/lib/history"
-import { postJSON, postStream } from "@/lib/http"
+import { postForm, postJSON, postStream } from "@/lib/http"
 import { readChatCompletionStream } from "@/lib/openaiStream"
 
 const ImagePreviewLightbox = lazy(
@@ -56,6 +55,20 @@ const ImagePreviewLightbox = lazy(
 type PromptRestore = {
   source: string
   result: string
+}
+
+function generateFormData(
+  prompt: string,
+  size: string,
+  fingerprint: string,
+  referenceFile: File
+) {
+  const form = new FormData()
+  form.set("prompt", prompt)
+  form.set("size", size)
+  form.set("fingerprint", fingerprint)
+  form.set("image", referenceFile, referenceFile.name)
+  return form
 }
 
 type ImageGeneratorProps = {
@@ -70,12 +83,14 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
   const enhanceAbortRef = useRef<AbortController | null>(null)
   const promptInputRef = useRef<HTMLTextAreaElement>(null)
   const referenceInputRef = useRef<HTMLInputElement>(null)
+  const referencePreviewURLRef = useRef("")
   const [language, setLanguage] = useState<Language>(initialLanguage)
   const [prompt, setPrompt] = useState("")
   const [enhanceDirection, setEnhanceDirection] =
     useState<EnhanceDirection>(initialEnhanceDirection)
   const [size, setSize] = useState(initialSize)
   const [referenceImage, setReferenceImage] = useState("")
+  const [referenceFile, setReferenceFile] = useState<File | null>(null)
   const [referenceName, setReferenceName] = useState("")
   const [loading, setLoading] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
@@ -158,10 +173,11 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
   useEffect(() => {
     return () => {
       enhanceAbortRef.current?.abort()
+      revokeReferencePreview()
     }
   }, [])
 
-  async function selectReference(file?: File) {
+  function selectReference(file?: File) {
     if (!file) {
       resetReference()
       return
@@ -176,7 +192,11 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
       toast.error(t.toast.referenceTooLarge)
       return
     }
-    setReferenceImage(await readFile(file))
+    const previewURL = URL.createObjectURL(file)
+    revokeReferencePreview()
+    referencePreviewURLRef.current = previewURL
+    setReferenceImage(previewURL)
+    setReferenceFile(file)
     setReferenceName(file.name)
   }
 
@@ -216,12 +236,16 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
     setSubmittingPreview({ prompt: submittedPrompt, size })
     setLoading(true)
     try {
-      const data = await postJSON<TaskResponse>("/api/images/generate", {
-        prompt: submittedPrompt,
-        size,
-        referenceImage,
-        fingerprint,
-      })
+      const data = referenceFile
+        ? await postForm<TaskResponse>(
+            "/api/images/generate",
+            generateFormData(submittedPrompt, size, fingerprint, referenceFile)
+          )
+        : await postJSON<TaskResponse>("/api/images/generate", {
+            prompt: submittedPrompt,
+            size,
+            fingerprint,
+          })
       const remainingCredits = data.remainingCredits
       if (typeof remainingCredits === "number") {
         applyRemainingCredits(remainingCredits)
@@ -297,6 +321,7 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
       if (!hasVisibleOutput) {
         setPrompt(originalPrompt)
       } else {
+        setPrompt(enhancedPrompt)
         setPromptRestore({ source: originalPrompt, result: enhancedPrompt })
       }
       toast.error(
@@ -348,11 +373,21 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
   }
 
   function resetReference() {
+    revokeReferencePreview()
     setReferenceImage("")
+    setReferenceFile(null)
     setReferenceName("")
     if (referenceInputRef.current) {
       referenceInputRef.current.value = ""
     }
+  }
+
+  function revokeReferencePreview() {
+    if (!referencePreviewURLRef.current) {
+      return
+    }
+    URL.revokeObjectURL(referencePreviewURLRef.current)
+    referencePreviewURLRef.current = ""
   }
 
   function openPreview(item: ImageHistory | null) {
@@ -410,7 +445,7 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
             onEnhance={() => void enhancePrompt()}
             onRestorePrompt={restorePrompt}
             onSizeChange={setSize}
-            onReferenceChange={(file) => void selectReference(file)}
+            onReferenceChange={selectReference}
             onResetReference={resetReference}
             onGenerate={() => void generate()}
           />

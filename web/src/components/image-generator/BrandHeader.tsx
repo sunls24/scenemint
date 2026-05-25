@@ -37,6 +37,9 @@ export function BrandHeader({
           aria-hidden="true"
           width="296"
           height="256"
+          draggable={false}
+          loading="eager"
+          decoding="async"
           className="scene-brand-mark h-12 w-auto shrink-0 md:h-16"
         />
         <div className="scene-brand-copy flex min-w-0 flex-col gap-2">

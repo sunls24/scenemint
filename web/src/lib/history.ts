@@ -1,15 +1,4 @@
-import {
-  persistentAtom,
-  setPersistentEngine,
-} from "@nanostores/persistent"
-
-if (typeof window === "undefined") {
-  const storage: Record<string, string> = {}
-  setPersistentEngine(storage, {
-    addEventListener() {},
-    removeEventListener() {},
-  })
-}
+import { persistentAtom } from "@nanostores/persistent"
 
 export type ImageStatus = "queued" | "running" | "completed" | "failed"
 

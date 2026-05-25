@@ -265,7 +265,7 @@ export function GeneratorForm({
           size="lg"
           onClick={onGenerate}
           disabled={generateDisabled}
-          className="w-full shadow-md shadow-primary/15"
+          className="w-full"
         >
           {loading || currentActive ? (
             <Loader2Icon data-icon="inline-start" className="animate-spin" />
