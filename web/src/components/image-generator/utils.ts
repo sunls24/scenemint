@@ -2,6 +2,24 @@ import type { ImageHistory, ImageStatus } from "@/lib/history"
 
 import type { ImageGeneratorCopy } from "./copy"
 
+/** 通过 fetch blob 下载图片，失败时在新标签页打开 */
+export async function downloadImage(url: string, filename: string) {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    window.open(url, "_blank")
+  }
+}
+
 export type TaskResponse = Omit<ImageHistory, "referenceName"> & {
   remainingCredits?: number
 }

@@ -44,10 +44,7 @@ export function HistoryPanel({
     <Card className="scene-card lg:col-start-2 lg:col-span-1 xl:col-start-3 xl:row-start-1 xl:max-h-full xl:min-h-0 xl:overflow-hidden">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle className="text-[1.05rem]">{t.historyTitle}</CardTitle>
-            <CardDescription>{t.historyCount(history.length)}</CardDescription>
-          </div>
+          <CardTitle className="text-[1.05rem]">{t.historyTitle}</CardTitle>
           <Button
             type="button"
             variant="destructive"
@@ -60,6 +57,12 @@ export function HistoryPanel({
             <Trash2Icon data-icon="inline-start" />
             {t.clearHistory}
           </Button>
+        </div>
+        <div className="flex items-center justify-between">
+          <CardDescription>{t.historyCount(history.length)}</CardDescription>
+          {history.length > 0 && (
+            <span className="text-[0.7rem] text-muted-foreground">{t.historyRetention}</span>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col">

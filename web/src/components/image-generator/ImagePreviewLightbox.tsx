@@ -8,6 +8,7 @@ import "yet-another-react-lightbox/styles.css"
 
 import type { ImageGeneratorCopy } from "./copy"
 import type { PreviewImage } from "./utils"
+import { downloadImage } from "./utils"
 
 type ImagePreviewLightboxProps = {
   index: number
@@ -58,6 +59,14 @@ export default function ImagePreviewLightbox({
         scrollToZoom: true,
         doubleClickMaxStops: 3,
         pinchZoomV4: true,
+      }}
+      download={{
+        download: ({ slide }) => {
+          const dl = slide.download
+          if (typeof dl === "object" && dl !== null) {
+            downloadImage(dl.url, dl.filename)
+          }
+        },
       }}
       labels={{
         Close: t.lightbox.close,

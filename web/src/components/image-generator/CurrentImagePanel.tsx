@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react"
 import {
+  DownloadIcon,
   ImageIcon,
   ListRestartIcon,
   Loader2Icon,
@@ -22,6 +23,7 @@ import type { ImageGeneratorCopy } from "./copy"
 import { FallbackImage } from "./FallbackImage"
 import {
   dimensionsOf,
+  downloadImage,
   statusLabel,
   statusOf,
 } from "./utils"
@@ -82,6 +84,14 @@ export function CurrentImagePanel({
     ),
   }
 
+  const handleDownload = currentTask?.image
+    ? () =>
+        downloadImage(
+          currentTask.image,
+          `scenemint-${currentTask.id ?? Date.now()}.png`
+        )
+    : undefined
+
   return (
     <Card className="scene-card scene-card-clear min-h-0 overflow-hidden xl:max-h-full">
       <CardHeader>
@@ -114,6 +124,18 @@ export function CurrentImagePanel({
                   {t.reusePrompt}
                 </Button>
               ) : null}
+              {handleDownload && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={handleDownload}
+                  title={t.lightbox.download}
+                  aria-label={t.lightbox.download}
+                >
+                  <DownloadIcon />
+                </Button>
+              )}
             </div>
           </div>
           {currentDescription && (
