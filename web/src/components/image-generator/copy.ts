@@ -11,6 +11,10 @@ export const copy = {
     appDescription: "Turn imagination into images",
     model: "gpt-image-2",
     language: "中文",
+    relatedLinks: {
+      divination: "AI Divination",
+      tempMail: "Temp Mail",
+    },
     promptLabel: "Image description",
     promptPlaceholder:
       "A quiet studio scene with a ceramic vase, morning light, and soft shadows",
@@ -108,6 +112,10 @@ export const copy = {
     appDescription: "把想象变成画面",
     model: "gpt-image-2",
     language: "English",
+    relatedLinks: {
+      divination: "AI 算卦",
+      tempMail: "临时邮箱",
+    },
     promptLabel: "画面描述",
     promptPlaceholder: "清晨光线里的安静工作室，陶瓷花瓶，柔和阴影",
     referenceLabel: "参考图（可选）",

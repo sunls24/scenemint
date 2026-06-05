@@ -6,6 +6,10 @@ import "@/styles/global.css"
 
 const appVersion = packageInfo.version
 const githubUrl = "https://github.com/sunls24/scenemint"
+const relatedLinks = {
+  divination: "https://divination.sunls.de/",
+  tempMail: "https://mail.sunls.de/",
+} as const
 const siteTitle = "SceneMint - 把想象变成画面"
 const siteDescription =
   "SceneMint 是轻量 AI 图像生成产品，支持文字描述、参考图和提示词增强，快速把灵感变成画面。"
@@ -55,6 +59,7 @@ const structuredData = {
     <ImageGenerator
       appVersion={appVersion}
       githubUrl={githubUrl}
+      relatedLinks={relatedLinks}
       client:only="react"
     />
   </body>

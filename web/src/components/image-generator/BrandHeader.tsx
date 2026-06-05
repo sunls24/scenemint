@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button"
 
 import type { ImageGeneratorCopy, Language } from "./copy"
 
+export type RelatedLinks = {
+  divination: string
+  tempMail: string
+}
+
 function GithubIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 16 16" fill="currentColor" {...props}>
@@ -16,6 +21,7 @@ function GithubIcon(props: SVGProps<SVGSVGElement>) {
 type BrandHeaderProps = {
   appVersion: string
   githubUrl: string
+  relatedLinks: RelatedLinks
   language: Language
   t: ImageGeneratorCopy
   onLanguageChange: (language: Language) => void
@@ -24,6 +30,7 @@ type BrandHeaderProps = {
 export function BrandHeader({
   appVersion,
   githubUrl,
+  relatedLinks,
   language,
   t,
   onLanguageChange,
@@ -63,20 +70,38 @@ export function BrandHeader({
           <LanguagesIcon data-icon="inline-start" />
           {t.language}
         </Button>
-        <p className="font-mono flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground/70 md:justify-end">
-          <span>Vibe coding by Codex App</span>
+        <p className="font-mono flex w-full max-w-full flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs leading-5 text-muted-foreground/70 md:w-auto md:px-0 md:justify-end">
+          <a
+            href={relatedLinks.divination}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center rounded-sm text-primary/90 transition-colors hover:font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            {t.relatedLinks.divination}
+          </a>
+          <span aria-hidden="true">/</span>
+          <a
+            href={relatedLinks.tempMail}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center rounded-sm text-primary/90 transition-colors hover:font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            {t.relatedLinks.tempMail}
+          </a>
           <span aria-hidden="true">/</span>
           <a
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             aria-label={`SceneMint GitHub repository v${appVersion}`}
           >
             <GithubIcon className="size-3.5" aria-hidden="true" />
             GitHub
             <span>v{appVersion}</span>
           </a>
+          <span aria-hidden="true">/</span>
+          <span>Vibe coding by Codex App</span>
         </p>
       </div>
     </header>

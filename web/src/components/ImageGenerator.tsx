@@ -10,7 +10,10 @@ import {
 import { toast } from "sonner"
 
 import { Toaster } from "@/components/ui/sonner"
-import { BrandHeader } from "@/components/image-generator/BrandHeader"
+import {
+  BrandHeader,
+  type RelatedLinks,
+} from "@/components/image-generator/BrandHeader"
 import {
   copy,
   type EnhanceDirection,
@@ -74,9 +77,14 @@ function generateFormData(
 type ImageGeneratorProps = {
   appVersion: string
   githubUrl: string
+  relatedLinks: RelatedLinks
 }
 
-export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
+export function ImageGenerator({
+  appVersion,
+  githubUrl,
+  relatedLinks,
+}: ImageGeneratorProps) {
   const currentTask = useStore($currentTask)
   const history = useStore($history)
   const submittingRef = useRef(false)
@@ -405,6 +413,7 @@ export function ImageGenerator({ appVersion, githubUrl }: ImageGeneratorProps) {
         <BrandHeader
           appVersion={appVersion}
           githubUrl={githubUrl}
+          relatedLinks={relatedLinks}
           language={language}
           t={t}
           onLanguageChange={setLanguage}
