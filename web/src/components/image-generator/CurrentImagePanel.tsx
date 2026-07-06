@@ -180,6 +180,7 @@ export function CurrentImagePanel({
                   decoding="async"
                   className="object-contain"
                   wrapperClassName="size-full rounded-lg"
+                  errorLabel={t.imageExpired}
                 />
                 <span className="scene-preview-open-indicator pointer-events-none absolute right-3 bottom-3 inline-flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/image:opacity-100 group-focus-visible/image:opacity-100">
                   <Maximize2Icon />

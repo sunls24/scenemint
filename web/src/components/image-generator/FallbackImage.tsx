@@ -1,4 +1,4 @@
-import { RotateCwIcon } from "lucide-react"
+import { ImageOffIcon, RotateCwIcon } from "lucide-react"
 import { useState, type ImgHTMLAttributes } from "react"
 
 import { cn } from "@/lib/utils"
@@ -10,6 +10,7 @@ type FallbackImageProps = Omit<
   "onLoad" | "onError"
 > & {
   wrapperClassName?: string
+  errorLabel?: string
 }
 
 export function FallbackImage({
@@ -17,10 +18,13 @@ export function FallbackImage({
   className,
   src,
   alt,
+  errorLabel,
   ...props
 }: FallbackImageProps) {
   const [loadedSrc, setLoadedSrc] = useState<ImageSource>()
+  const [failedSrc, setFailedSrc] = useState<ImageSource>()
   const loaded = Boolean(src) && loadedSrc === src
+  const failed = Boolean(src) && failedSrc === src
 
   return (
     <span
@@ -28,7 +32,7 @@ export function FallbackImage({
         "scene-image-fallback relative flex items-center justify-center overflow-hidden",
         wrapperClassName
       )}
-      data-state={loaded ? "loaded" : "loading"}
+      data-state={loaded ? "loaded" : failed ? "error" : "loading"}
     >
       <img
         {...props}
@@ -38,18 +42,26 @@ export function FallbackImage({
         className={cn("scene-image-fallback-img", className)}
         onLoad={(event) => {
           event.currentTarget.style.visibility = "visible"
+          setFailedSrc(undefined)
           setLoadedSrc(src)
         }}
         onError={(event) => {
           event.currentTarget.style.visibility = "hidden"
+          setFailedSrc(src)
         }}
       />
-      {!loaded && (
+      {!loaded && !failed && (
         <span
           className="scene-image-fallback-mark"
           aria-hidden="true"
         >
           <RotateCwIcon />
+        </span>
+      )}
+      {failed && (
+        <span className="scene-image-fallback-error">
+          <ImageOffIcon aria-hidden="true" />
+          {errorLabel && <span>{errorLabel}</span>}
         </span>
       )}
     </span>

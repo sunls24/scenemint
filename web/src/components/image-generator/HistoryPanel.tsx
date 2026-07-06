@@ -104,6 +104,7 @@ export function HistoryPanel({
                         fetchPriority="low"
                         className="object-cover"
                         wrapperClassName="size-full rounded-md"
+                        errorLabel={t.imageExpired}
                       />
                     ) : (
                       <ImageIcon className="text-muted-foreground" />

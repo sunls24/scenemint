@@ -525,6 +525,14 @@
   box-shadow: inset 0 0 0 1px transparent;
 }
 
+.scene-image-fallback[data-state="error"] {
+  background-image: linear-gradient(
+    145deg,
+    oklch(0.99 0.004 174 / 86%),
+    oklch(0.94 0.012 190 / 72%)
+  );
+}
+
 .scene-image-fallback-img {
   position: relative;
   z-index: 2;
@@ -553,6 +561,32 @@
 
 .scene-image-fallback[data-state="loading"] .scene-image-fallback-mark {
   animation: scene-image-fallback-spin 1.2s linear infinite;
+}
+
+.scene-image-fallback-error {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  min-width: max-content;
+  max-width: calc(100% - 0.5rem);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--muted-foreground);
+  font-size: clamp(0.68rem, 4.5%, 0.8rem);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.scene-image-fallback-error svg {
+  width: clamp(0.95rem, 18%, 1.25rem);
+  height: clamp(0.95rem, 18%, 1.25rem);
+  flex-shrink: 0;
+  stroke-width: 1.9;
 }
 
 .scene-current-media img {
