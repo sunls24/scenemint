@@ -1,6 +1,10 @@
 package config
 
-import "github.com/caarlos0/env/v11"
+import (
+	"time"
+
+	"github.com/caarlos0/env/v11"
+)
 
 type Config struct {
 	Host        string      `env:"HOST" envDefault:"127.0.0.1"`
@@ -17,10 +21,11 @@ type ChatGPT2API struct {
 }
 
 type Security struct {
-	SecureCookies      bool   `env:"SECURE_COOKIES" envDefault:"false"`
-	TurnstileEnabled   bool   `env:"TURNSTILE_ENABLED" envDefault:"false"`
-	TurnstileSiteKey   string `env:"TURNSTILE_SITE_KEY"`
-	TurnstileSecretKey string `env:"TURNSTILE_SECRET_KEY"`
+	SecureCookies      bool          `env:"SECURE_COOKIES" envDefault:"false"`
+	TurnstileEnabled   bool          `env:"TURNSTILE_ENABLED" envDefault:"false"`
+	TurnstileSiteKey   string        `env:"TURNSTILE_SITE_KEY"`
+	TurnstileSecretKey string        `env:"TURNSTILE_SECRET_KEY"`
+	TurnstileHumanTTL  time.Duration `env:"TURNSTILE_HUMAN_TTL"`
 }
 
 func MustNew() *Config {

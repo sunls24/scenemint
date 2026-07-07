@@ -21,6 +21,7 @@ const (
 	csrfErrorHeader = "X-SceneMint-CSRF-Error"
 	csrfTokenBytes  = 32
 	maxBodyBytes    = 16 << 20
+	defaultHumanTTL = 6 * time.Hour
 )
 
 type SessionResponse struct {
@@ -34,14 +35,20 @@ type Middleware struct {
 	secureCookies    bool
 	turnstileEnabled bool
 	turnstileSiteKey string
+	humanTTL         time.Duration
 	turnstile        *turnstileVerifier
 }
 
 func New(cfg config.Security) *Middleware {
+	humanTTL := cfg.TurnstileHumanTTL
+	if humanTTL <= 0 {
+		humanTTL = defaultHumanTTL
+	}
 	return &Middleware{
 		secureCookies:    cfg.SecureCookies,
 		turnstileEnabled: cfg.TurnstileEnabled,
 		turnstileSiteKey: strings.TrimSpace(cfg.TurnstileSiteKey),
+		humanTTL:         humanTTL,
 		turnstile:        newTurnstileVerifier(cfg.TurnstileSecretKey),
 	}
 }

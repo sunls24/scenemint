@@ -21,7 +21,6 @@ const (
 	turnstileHeader     = "X-Turnstile-Token"
 	turnstileTimeout    = 5 * time.Second
 	humanCookieName     = "_scenemint_human"
-	humanCookieTTL      = time.Hour
 	humanVerifiedHeader = "X-SceneMint-Turnstile-Verified-Until"
 )
 
@@ -90,12 +89,12 @@ func (m *Middleware) csrfCookieToken(c *echo.Context) (string, bool) {
 }
 
 func (m *Middleware) setHumanCookie(c *echo.Context, csrfToken string) {
-	expiresAt := time.Now().Add(humanCookieTTL).UTC()
+	expiresAt := time.Now().Add(m.humanTTL).UTC()
 	c.SetCookie(&http.Cookie{
 		Name:     humanCookieName,
 		Value:    m.humanCookieValue(csrfToken, expiresAt),
 		Path:     "/",
-		MaxAge:   int(humanCookieTTL.Seconds()),
+		MaxAge:   int(m.humanTTL.Seconds()),
 		Expires:  expiresAt,
 		Secure:   m.secureCookies,
 		HttpOnly: true,

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"scenemint/internal/config"
 
@@ -270,11 +271,36 @@ func TestTurnstileSetsHumanCookieAfterValidToken(t *testing.T) {
 	if humanCookie == nil {
 		t.Fatalf("%s cookie was not set", humanCookieName)
 	}
-	if humanCookie.MaxAge != int(humanCookieTTL.Seconds()) {
-		t.Fatalf("%s MaxAge = %d, want %d", humanCookieName, humanCookie.MaxAge, int(humanCookieTTL.Seconds()))
+	if humanCookie.MaxAge != int(defaultHumanTTL.Seconds()) {
+		t.Fatalf("%s MaxAge = %d, want %d", humanCookieName, humanCookie.MaxAge, int(defaultHumanTTL.Seconds()))
 	}
 	if got := rec.Header().Get(humanVerifiedHeader); got == "" {
 		t.Fatalf("%s header is empty", humanVerifiedHeader)
+	}
+}
+
+func TestTurnstileUsesConfiguredHumanTTL(t *testing.T) {
+	sec := New(config.Security{
+		TurnstileSecretKey: "secret-key",
+		TurnstileHumanTTL:  2 * time.Hour,
+	})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/api/protected", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	csrfToken, err := newToken()
+	if err != nil {
+		t.Fatalf("new csrf token: %v", err)
+	}
+
+	sec.setHumanCookie(c, csrfToken)
+
+	humanCookie := findCookie(rec.Result().Cookies(), humanCookieName)
+	if humanCookie == nil {
+		t.Fatalf("%s cookie was not set", humanCookieName)
+	}
+	if humanCookie.MaxAge != int((2 * time.Hour).Seconds()) {
+		t.Fatalf("%s MaxAge = %d, want %d", humanCookieName, humanCookie.MaxAge, int((2 * time.Hour).Seconds()))
 	}
 }
 
