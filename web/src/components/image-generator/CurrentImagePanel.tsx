@@ -36,6 +36,8 @@ type CurrentImagePanelProps = {
     size: string
   } | null
   reuseDisabled: boolean
+  canOpenPreview: (item: ImageHistory | null | undefined) => boolean
+  onImageUnavailable: (url: string, unavailable: boolean) => void
   onOpenPreview: (item: ImageHistory | null) => void
   onReusePrompt: (prompt: string) => void
 }
@@ -45,10 +47,14 @@ export function CurrentImagePanel({
   currentTask,
   submittingPreview,
   reuseDisabled,
+  canOpenPreview,
+  onImageUnavailable,
   onOpenPreview,
   onReusePrompt,
 }: CurrentImagePanelProps) {
   const currentStatus = currentTask ? statusOf(currentTask) : undefined
+  const currentImage = currentTask?.image
+  const currentPreviewable = canOpenPreview(currentTask)
   const pendingLabel = submittingPreview ? t.submitting : t.generating
   const statusBadgeLabel = submittingPreview
     ? t.submitting
@@ -84,7 +90,7 @@ export function CurrentImagePanel({
     ),
   }
 
-  const handleDownload = currentTask?.image
+  const handleDownload = currentTask?.image && currentPreviewable
     ? () =>
         downloadImage(
           currentTask.image,
@@ -167,24 +173,28 @@ export function CurrentImagePanel({
                 <XCircleIcon />
                 <span>{currentTask.error || t.currentFailed}</span>
               </div>
-            ) : currentTask?.image ? (
+            ) : currentTask && currentImage ? (
               <button
                 type="button"
                 onClick={() => onOpenPreview(currentTask)}
-                className="scene-current-media group/image relative flex items-center justify-center overflow-hidden rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                disabled={!currentPreviewable}
+                className="scene-current-media group/image relative flex items-center justify-center overflow-hidden rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default"
                 aria-label={t.currentPreview}
               >
                 <FallbackImage
-                  src={currentTask.image}
+                  src={currentImage}
                   alt={currentTask.prompt}
                   decoding="async"
                   className="object-contain"
                   wrapperClassName="size-full rounded-lg"
-                  errorLabel={t.imageExpired}
+                  onLoad={() => onImageUnavailable(currentImage, false)}
+                  onError={() => onImageUnavailable(currentImage, true)}
                 />
-                <span className="scene-preview-open-indicator pointer-events-none absolute right-3 bottom-3 inline-flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/image:opacity-100 group-focus-visible/image:opacity-100">
-                  <Maximize2Icon />
-                </span>
+                {currentPreviewable && (
+                  <span className="scene-preview-open-indicator pointer-events-none absolute right-3 bottom-3 inline-flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/image:opacity-100 group-focus-visible/image:opacity-100">
+                    <Maximize2Icon />
+                  </span>
+                )}
               </button>
             ) : (
               <div className="scene-current-empty-state flex flex-col items-center justify-center gap-2.5 text-center text-muted-foreground">

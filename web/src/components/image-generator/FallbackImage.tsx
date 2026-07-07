@@ -5,12 +5,8 @@ import { cn } from "@/lib/utils"
 
 type ImageSource = ImgHTMLAttributes<HTMLImageElement>["src"]
 
-type FallbackImageProps = Omit<
-  ImgHTMLAttributes<HTMLImageElement>,
-  "onLoad" | "onError"
-> & {
+type FallbackImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   wrapperClassName?: string
-  errorLabel?: string
 }
 
 export function FallbackImage({
@@ -18,7 +14,8 @@ export function FallbackImage({
   className,
   src,
   alt,
-  errorLabel,
+  onLoad,
+  onError,
   ...props
 }: FallbackImageProps) {
   const [loadedSrc, setLoadedSrc] = useState<ImageSource>()
@@ -44,10 +41,12 @@ export function FallbackImage({
           event.currentTarget.style.visibility = "visible"
           setFailedSrc(undefined)
           setLoadedSrc(src)
+          onLoad?.(event)
         }}
         onError={(event) => {
           event.currentTarget.style.visibility = "hidden"
           setFailedSrc(src)
+          onError?.(event)
         }}
       />
       {!loaded && !failed && (
@@ -61,7 +60,6 @@ export function FallbackImage({
       {failed && (
         <span className="scene-image-fallback-error">
           <ImageOffIcon aria-hidden="true" />
-          {errorLabel && <span>{errorLabel}</span>}
         </span>
       )}
     </span>

@@ -7,7 +7,12 @@ import { postJSON } from "@/lib/http"
 import type { ImageGeneratorCopy } from "./copy"
 import type { QuotaStatus } from "./QuotaPanel"
 
-export function useQuota(t: ImageGeneratorCopy) {
+type UseQuotaOptions = {
+  getTurnstileToken?: () => Promise<string | undefined>
+}
+
+export function useQuota(t: ImageGeneratorCopy, options: UseQuotaOptions = {}) {
+  const { getTurnstileToken } = options
   const [fingerprint, setFingerprint] = useState("")
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null)
   const [quotaLoading, setQuotaLoading] = useState(true)
@@ -80,9 +85,16 @@ export function useQuota(t: ImageGeneratorCopy) {
     setSigningIn(true)
     try {
       const previous = quotaStatus
-      const status = await postJSON<QuotaStatus>("/api/quota/check-in", {
-        fingerprint,
-      })
+      const turnstileToken = await getTurnstileToken?.()
+      const status = await postJSON<QuotaStatus>(
+        "/api/quota/check-in",
+        {
+          fingerprint,
+        },
+        {
+          turnstileToken,
+        }
+      )
       setQuotaStatus(status)
       setQuotaError("")
       if (status.balance >= status.cap && !status.signedToday) {
@@ -97,7 +109,7 @@ export function useQuota(t: ImageGeneratorCopy) {
     } finally {
       setSigningIn(false)
     }
-  }, [fingerprint, quotaStatus, signingIn, t.quota])
+  }, [fingerprint, getTurnstileToken, quotaStatus, signingIn, t.quota])
 
   const retryQuota = useCallback(async () => {
     if (fingerprint) {

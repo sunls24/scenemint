@@ -5,6 +5,7 @@ export const sizeStorageKey = "scenemint:size"
 export const enhanceDirectionStorageKey = "scenemint:enhanceDirection"
 export const maxReferenceSizeMB = 10
 export const maxReferenceSize = maxReferenceSizeMB * 1024 * 1024
+export const imageRetentionDays = 7
 
 export const copy = {
   en: {
@@ -32,6 +33,7 @@ export const copy = {
     preparingCredits: "Preparing credits",
     creditsUnavailable: "Credits unavailable",
     insufficientCredits: "Insufficient image credits",
+    verifyingHuman: "Verifying",
     submitting: "Submitting",
     generating: "Generating",
     reusePrompt: "Reuse",
@@ -58,11 +60,10 @@ export const copy = {
     currentTitle: "Current image",
     currentEmpty: "No image yet",
     currentFailed: "Generation failed",
-    imageExpired: "Unavailable",
     currentPreview: "Open preview",
     historyTitle: "History queue",
     historyCount: (count: number) => `${count} saved locally`,
-    historyRetention: "Images are kept for 7 days only",
+    historyRetention: `Images are kept for ${imageRetentionDays} days only`,
     historyEmpty: "No history yet.",
     clearHistory: "Clear history",
     clearHistoryLabel: "Clear history",
@@ -133,6 +134,7 @@ export const copy = {
     preparingCredits: "获取额度中",
     creditsUnavailable: "额度读取失败",
     insufficientCredits: "生成额度不足",
+    verifyingHuman: "校验中",
     submitting: "提交中",
     generating: "生成中",
     reusePrompt: "复用",
@@ -159,11 +161,10 @@ export const copy = {
     currentTitle: "当前图片",
     currentEmpty: "暂无图片",
     currentFailed: "生成失败",
-    imageExpired: "已失效",
     currentPreview: "打开预览",
     historyTitle: "历史记录",
     historyCount: (count: number) => `共 ${count} 条记录`,
-    historyRetention: "图片仅保留 7 天",
+    historyRetention: `图片仅保留 ${imageRetentionDays} 天`,
     historyEmpty: "暂无历史记录。",
     clearHistory: "清空",
     clearHistoryLabel: "清空历史记录",

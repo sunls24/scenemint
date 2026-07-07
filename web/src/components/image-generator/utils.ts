@@ -1,11 +1,16 @@
 import type { ImageHistory, ImageStatus } from "@/lib/history"
 
-import type { ImageGeneratorCopy } from "./copy"
+import { imageRetentionDays, type ImageGeneratorCopy } from "./copy"
+
+const imageRetentionMs = imageRetentionDays * 24 * 60 * 60 * 1000
 
 /** 通过 fetch blob 下载图片，失败时在新标签页打开 */
 export async function downloadImage(url: string, filename: string) {
   try {
     const res = await fetch(url)
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`)
+    }
     const blob = await res.blob()
     const blobUrl = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -43,7 +48,12 @@ export function canPreview(
   if (!item?.image) {
     return false
   }
-  return statusOf(item) === "completed"
+  return statusOf(item) === "completed" && !isImageExpired(item)
+}
+
+export function isImageExpired(item: ImageHistory) {
+  const createdAt = Date.parse(item.createdAt)
+  return Number.isFinite(createdAt) && Date.now() - createdAt >= imageRetentionMs
 }
 
 export function dimensionsOf(size: string) {

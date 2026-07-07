@@ -17,7 +17,10 @@ type ChatGPT2API struct {
 }
 
 type Security struct {
-	SecureCookies bool `env:"SECURE_COOKIES" envDefault:"false"`
+	SecureCookies      bool   `env:"SECURE_COOKIES" envDefault:"false"`
+	TurnstileEnabled   bool   `env:"TURNSTILE_ENABLED" envDefault:"false"`
+	TurnstileSiteKey   string `env:"TURNSTILE_SITE_KEY"`
+	TurnstileSecretKey string `env:"TURNSTILE_SECRET_KEY"`
 }
 
 func MustNew() *Config {

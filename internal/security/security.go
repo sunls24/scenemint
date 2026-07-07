@@ -17,22 +17,32 @@ import (
 )
 
 const (
-	csrfCookieName = "_scenemint_csrf"
-	csrfTokenBytes = 32
-	maxBodyBytes   = 16 << 20
+	csrfCookieName  = "_scenemint_csrf"
+	csrfErrorHeader = "X-SceneMint-CSRF-Error"
+	csrfTokenBytes  = 32
+	maxBodyBytes    = 16 << 20
 )
 
 type SessionResponse struct {
-	CSRFToken string `json:"csrfToken"`
+	CSRFToken              string `json:"csrfToken"`
+	TurnstileEnabled       bool   `json:"turnstileEnabled"`
+	TurnstileSiteKey       string `json:"turnstileSiteKey,omitempty"`
+	TurnstileVerifiedUntil string `json:"turnstileVerifiedUntil,omitempty"`
 }
 
 type Middleware struct {
-	secureCookies bool
+	secureCookies    bool
+	turnstileEnabled bool
+	turnstileSiteKey string
+	turnstile        *turnstileVerifier
 }
 
 func New(cfg config.Security) *Middleware {
 	return &Middleware{
-		secureCookies: cfg.SecureCookies,
+		secureCookies:    cfg.SecureCookies,
+		turnstileEnabled: cfg.TurnstileEnabled,
+		turnstileSiteKey: strings.TrimSpace(cfg.TurnstileSiteKey),
+		turnstile:        newTurnstileVerifier(cfg.TurnstileSecretKey),
 	}
 }
 
@@ -65,11 +75,11 @@ func (m *Middleware) CSRF() echo.MiddlewareFunc {
 		return func(c *echo.Context) error {
 			cookie, err := c.Cookie(csrfCookieName)
 			if err != nil || !validToken(cookie.Value) {
-				return reject(c, http.StatusForbidden, "会话校验失败，请刷新页面后重试")
+				return rejectCSRF(c)
 			}
 			token := strings.TrimSpace(c.Request().Header.Get(echo.HeaderXCSRFToken))
 			if !sameToken(cookie.Value, token) {
-				return reject(c, http.StatusForbidden, "会话校验失败，请刷新页面后重试")
+				return rejectCSRF(c)
 			}
 			return next(c)
 		}
@@ -81,10 +91,18 @@ func (m *Middleware) Session(c *echo.Context) error {
 	if err != nil {
 		return reject(c, http.StatusInternalServerError, "会话创建失败")
 	}
+	var verifiedUntil string
+	if expiresAt, ok := m.validHumanCookie(c, token); ok {
+		verifiedUntil = expiresAt.Format(time.RFC3339)
+		setTurnstileVerifiedHeader(c, expiresAt)
+	}
 	return c.JSON(http.StatusOK, server.Envelope{
 		Message: "ok",
 		Data: SessionResponse{
-			CSRFToken: token,
+			CSRFToken:              token,
+			TurnstileEnabled:       m.turnstileEnabled,
+			TurnstileSiteKey:       m.turnstileSiteKey,
+			TurnstileVerifiedUntil: verifiedUntil,
 		},
 	})
 }
@@ -207,4 +225,9 @@ func sameToken(expected string, actual string) bool {
 
 func reject(c *echo.Context, status int, message string) error {
 	return c.JSON(status, server.ErrMsg(message).Envelope())
+}
+
+func rejectCSRF(c *echo.Context) error {
+	c.Response().Header().Set(csrfErrorHeader, "1")
+	return reject(c, http.StatusForbidden, "会话校验失败，请刷新页面后重试")
 }

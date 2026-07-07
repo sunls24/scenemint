@@ -25,6 +25,8 @@ type HistoryPanelProps = {
   t: ImageGeneratorCopy
   history: ImageHistory[]
   reuseDisabled: boolean
+  canOpenPreview: (item: ImageHistory | null | undefined) => boolean
+  onImageUnavailable: (url: string, unavailable: boolean) => void
   onClearHistory: () => void
   onOpenPreview: (item: ImageHistory | null) => void
   onReusePrompt: (prompt: string) => void
@@ -35,6 +37,8 @@ export function HistoryPanel({
   t,
   history,
   reuseDisabled,
+  canOpenPreview,
+  onImageUnavailable,
   onClearHistory,
   onOpenPreview,
   onReusePrompt,
@@ -79,7 +83,8 @@ export function HistoryPanel({
               const itemStatus = statusOf(item)
               const itemActive =
                 itemStatus === "queued" || itemStatus === "running"
-              const completed = itemStatus === "completed" && Boolean(item.image)
+              const itemImage = item.image
+              const itemPreviewable = canOpenPreview(item)
               return (
                 <div
                   key={item.id}
@@ -88,7 +93,7 @@ export function HistoryPanel({
                   <button
                     type="button"
                     onClick={() => onOpenPreview(item)}
-                    disabled={!completed}
+                    disabled={!itemPreviewable}
                     className="flex aspect-square size-16 shrink-0 appearance-none items-center justify-center overflow-hidden rounded-md border-0 bg-transparent p-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default"
                     aria-label={`${t.currentPreview}: ${item.prompt}`}
                   >
@@ -96,15 +101,16 @@ export function HistoryPanel({
                       <Skeleton className="size-full" />
                     ) : itemStatus === "failed" ? (
                       <XCircleIcon className="text-muted-foreground" />
-                    ) : item.image ? (
+                    ) : itemImage ? (
                       <FallbackImage
-                        src={item.image}
+                        src={itemImage}
                         alt=""
                         loading="lazy"
                         fetchPriority="low"
                         className="object-cover"
                         wrapperClassName="size-full rounded-md"
-                        errorLabel={t.imageExpired}
+                        onLoad={() => onImageUnavailable(itemImage, false)}
+                        onError={() => onImageUnavailable(itemImage, true)}
                       />
                     ) : (
                       <ImageIcon className="text-muted-foreground" />

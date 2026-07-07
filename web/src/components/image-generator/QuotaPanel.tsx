@@ -25,6 +25,7 @@ type QuotaPanelProps = {
   fingerprint: string
   loading: boolean
   signingIn: boolean
+  actionDisabled?: boolean
   error: string
   onCheckIn: () => void
   onRetry: () => void
@@ -43,6 +44,7 @@ export function QuotaPanel({
   fingerprint,
   loading,
   signingIn,
+  actionDisabled = false,
   error,
   onCheckIn,
   onRetry,
@@ -55,7 +57,12 @@ export function QuotaPanel({
   const fill = cap > 0 ? Math.max(0, Math.min(100, (balance / cap) * 100)) : 0
   const atCap = Boolean(status && status.balance >= status.cap)
   const checkInDisabled =
-    loading || signingIn || Boolean(error) || !status || status.signedToday
+    actionDisabled ||
+    loading ||
+    signingIn ||
+    Boolean(error) ||
+    !status ||
+    status.signedToday
   const checkInLabel = signingIn
     ? t.quota.signingIn
     : status?.signedToday
