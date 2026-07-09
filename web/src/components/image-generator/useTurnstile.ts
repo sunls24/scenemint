@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { getTurnstileConfig, isTurnstileVerified } from "@/lib/http"
+import {
+  getTurnstileConfig,
+  isTurnstileVerified,
+  verifyTurnstileToken,
+} from "@/lib/http"
 
 type TurnstileAPI = {
   render: (
@@ -39,16 +43,59 @@ type TokenRequest = {
   timeout: number
 }
 
+type ReadyRequest = {
+  resolve: () => void
+  reject: (err: Error) => void
+  timeout: number
+}
+
 export function useTurnstile() {
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetRef = useRef<string>("")
   const tokenRequestRef = useRef<TokenRequest | null>(null)
+  const readyRequestsRef = useRef<ReadyRequest[]>([])
+  const verificationPromiseRef = useRef<Promise<void> | null>(null)
+  const stateRef = useRef({
+    configReady: false,
+    enabled: false,
+    ready: false,
+    error: "",
+  })
   const [configReady, setConfigReady] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [siteKey, setSiteKey] = useState("")
   const [ready, setReady] = useState(false)
   const [error, setError] = useState("")
   const [interactive, setInteractive] = useState(false)
+
+  const settleReadyRequests = useCallback((err?: Error) => {
+    if (!err) {
+      const state = stateRef.current
+      if (!state.configReady) {
+        return
+      }
+      if (state.error) {
+        err = new Error(state.error)
+      } else if (
+        state.enabled &&
+        !isTurnstileVerified() &&
+        !state.ready
+      ) {
+        return
+      }
+    }
+
+    const requests = readyRequestsRef.current
+    readyRequestsRef.current = []
+    for (const request of requests) {
+      window.clearTimeout(request.timeout)
+      if (err) {
+        request.reject(err)
+      } else {
+        request.resolve()
+      }
+    }
+  }, [])
 
   const completeTokenRequest = useCallback((token?: string, err?: Error) => {
     setInteractive(false)
@@ -68,6 +115,22 @@ export function useTurnstile() {
     }
     request.resolve(token)
   }, [])
+
+  useEffect(() => {
+    stateRef.current = {
+      configReady,
+      enabled,
+      ready,
+      error,
+    }
+    settleReadyRequests()
+  }, [configReady, enabled, error, ready, settleReadyRequests])
+
+  useEffect(() => {
+    return () => {
+      settleReadyRequests(new Error("人机校验已取消"))
+    }
+  }, [settleReadyRequests])
 
   useEffect(() => {
     let disposed = false
@@ -157,21 +220,33 @@ export function useTurnstile() {
     }
   }, [completeTokenRequest, enabled, siteKey])
 
-  const getToken = useCallback(async () => {
-    if (!configReady) {
-      throw new Error("人机校验配置读取中")
+  const waitUntilReady = useCallback(() => {
+    const state = stateRef.current
+    if (state.error) {
+      return Promise.reject(new Error(state.error))
     }
-    if (isTurnstileVerified()) {
-      return undefined
+    if (
+      state.configReady &&
+      (!state.enabled || isTurnstileVerified() || state.ready)
+    ) {
+      return Promise.resolve()
     }
-    if (error) {
-      throw new Error(error)
-    }
-    if (!enabled) {
-      return undefined
-    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        readyRequestsRef.current = readyRequestsRef.current.filter(
+          (request) => request.resolve !== resolve
+        )
+        reject(new Error("人机校验尚未就绪，请重试"))
+      }, scriptTimeoutMs)
+      readyRequestsRef.current.push({ resolve, reject, timeout })
+      settleReadyRequests()
+    })
+  }, [settleReadyRequests])
+
+  const requestToken = useCallback(() => {
     const widgetId = widgetRef.current
-    if (!ready || !widgetId || !window.turnstile) {
+    if (!stateRef.current.ready || !widgetId || !window.turnstile) {
       throw new Error("人机校验尚未就绪")
     }
     if (tokenRequestRef.current) {
@@ -190,18 +265,45 @@ export function useTurnstile() {
       tokenRequestRef.current = { resolve, reject, timeout }
       window.turnstile?.execute(widgetId)
     })
-  }, [completeTokenRequest, configReady, enabled, error, ready])
+  }, [completeTokenRequest])
+
+  const ensureVerified = useCallback(async () => {
+    await waitUntilReady()
+
+    const state = stateRef.current
+    if (isTurnstileVerified() || !state.enabled) {
+      return
+    }
+    if (state.error) {
+      throw new Error(state.error)
+    }
+    if (verificationPromiseRef.current) {
+      await verificationPromiseRef.current
+      return
+    }
+
+    const verificationPromise = requestToken().then(verifyTurnstileToken)
+    verificationPromiseRef.current = verificationPromise
+    try {
+      await verificationPromise
+    } finally {
+      if (verificationPromiseRef.current === verificationPromise) {
+        verificationPromiseRef.current = null
+      }
+    }
+  }, [requestToken, waitUntilReady])
+
+  useEffect(() => {
+    if (!configReady || !enabled || error || !ready || isTurnstileVerified()) {
+      return
+    }
+    void ensureVerified().catch(() => undefined)
+  }, [configReady, enabled, ensureVerified, error, ready])
 
   return {
-    pending:
-      !configReady ||
-      (enabled &&
-        !isTurnstileVerified() &&
-        !ready &&
-        !error),
     interactive,
     containerRef,
-    getToken,
+    ensureVerified,
   }
 }
 

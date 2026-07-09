@@ -279,6 +279,92 @@ func TestTurnstileSetsHumanCookieAfterValidToken(t *testing.T) {
 	}
 }
 
+func TestVerifyTurnstileSetsHumanCookieAfterValidToken(t *testing.T) {
+	var verifyCalled bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		verifyCalled = true
+		w.Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer ts.Close()
+
+	sec := New(config.Security{
+		TurnstileEnabled:   true,
+		TurnstileSiteKey:   "site-key",
+		TurnstileSecretKey: "secret-key",
+	})
+	sec.turnstile.verifyURL = ts.URL
+	e := echo.New()
+	e.POST("/api/turnstile/verify", sec.VerifyTurnstile, sec.CSRF())
+
+	csrfToken, err := newToken()
+	if err != nil {
+		t.Fatalf("new csrf token: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/api/turnstile/verify", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfToken})
+	req.Header.Set(echo.HeaderXCSRFToken, csrfToken)
+	req.Header.Set(turnstileHeader, "valid-token")
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !verifyCalled {
+		t.Fatal("verify endpoint was not called")
+	}
+	if humanCookie := findCookie(rec.Result().Cookies(), humanCookieName); humanCookie == nil {
+		t.Fatalf("%s cookie was not set", humanCookieName)
+	}
+	if got := rec.Header().Get(humanVerifiedHeader); got == "" {
+		t.Fatalf("%s header is empty", humanVerifiedHeader)
+	}
+}
+
+func TestVerifyTurnstileAllowsHumanCookieWithoutToken(t *testing.T) {
+	var verifyCalls int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		verifyCalls++
+		w.Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer ts.Close()
+
+	sec := New(config.Security{
+		TurnstileEnabled:   true,
+		TurnstileSiteKey:   "site-key",
+		TurnstileSecretKey: "secret-key",
+	})
+	sec.turnstile.verifyURL = ts.URL
+	e := echo.New()
+	e.POST("/api/turnstile/verify", sec.VerifyTurnstile, sec.CSRF())
+
+	csrfToken, err := newToken()
+	if err != nil {
+		t.Fatalf("new csrf token: %v", err)
+	}
+	expiresAt := time.Now().Add(time.Hour).UTC()
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/api/turnstile/verify", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfToken})
+	req.AddCookie(&http.Cookie{Name: humanCookieName, Value: sec.humanCookieValue(csrfToken, expiresAt)})
+	req.Header.Set(echo.HeaderXCSRFToken, csrfToken)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if verifyCalls != 0 {
+		t.Fatalf("verify calls = %d, want %d", verifyCalls, 0)
+	}
+	if got := rec.Header().Get(humanVerifiedHeader); got == "" {
+		t.Fatalf("%s header is empty", humanVerifiedHeader)
+	}
+}
+
 func TestTurnstileUsesConfiguredHumanTTL(t *testing.T) {
 	sec := New(config.Security{
 		TurnstileSecretKey: "secret-key",

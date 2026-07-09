@@ -127,22 +127,18 @@ export function ImageGenerator({
     retryQuota,
     applyRemainingCredits,
   } = useQuota(t, {
-    getTurnstileToken: turnstile.getToken,
+    ensureTurnstileVerified: turnstile.ensureVerified,
   })
   const currentActive = Boolean(currentTask && isActive(currentTask))
   const controlsDisabled = loading || currentActive || enhancing
-  const turnstilePending = turnstile.pending
-  const enhanceDisabled = controlsDisabled || turnstilePending || !prompt.trim()
+  const enhanceDisabled = controlsDisabled || !prompt.trim()
   const generateDisabled =
     controlsDisabled ||
-    turnstilePending ||
     Boolean(quotaError) ||
     !quotaReady ||
     !hasCredits
   const generateLabel = quotaError
     ? t.creditsUnavailable
-    : turnstilePending
-      ? t.verifyingHuman
     : !quotaReady
       ? t.preparingCredits
       : !hasCredits
@@ -265,19 +261,16 @@ export function ImageGenerator({
     setSubmittingPreview({ prompt: submittedPrompt, size })
     setLoading(true)
     try {
-      const turnstileToken = await turnstile.getToken()
+      await turnstile.ensureVerified()
       const data = referenceFile
         ? await postForm<TaskResponse>(
             "/api/images/generate",
-            generateFormData(submittedPrompt, size, fingerprint, referenceFile),
-            { turnstileToken }
+            generateFormData(submittedPrompt, size, fingerprint, referenceFile)
           )
         : await postJSON<TaskResponse>("/api/images/generate", {
             prompt: submittedPrompt,
             size,
             fingerprint,
-          }, {
-            turnstileToken,
           })
       const remainingCredits = data.remainingCredits
       if (typeof remainingCredits === "number") {
@@ -325,7 +318,7 @@ export function ImageGenerator({
     let enhancedPrompt = ""
     let hasVisibleOutput = false
     try {
-      const turnstileToken = await turnstile.getToken()
+      await turnstile.ensureVerified()
       const stream = await postStream(
         "/api/prompts/enhance",
         {
@@ -334,7 +327,6 @@ export function ImageGenerator({
         },
         {
           signal: controller.signal,
-          turnstileToken,
         }
       )
       await readChatCompletionStream(stream, (delta) => {
@@ -506,7 +498,6 @@ export function ImageGenerator({
                 fingerprint={fingerprint}
                 loading={quotaLoading}
                 signingIn={signingIn}
-                actionDisabled={turnstilePending}
                 error={quotaError}
                 onCheckIn={() => void checkIn()}
                 onRetry={() => void retryQuota()}

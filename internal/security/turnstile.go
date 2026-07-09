@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/sunls24/gox/server"
 )
 
 const (
@@ -47,37 +48,54 @@ func newTurnstileVerifier(secretKey string) *turnstileVerifier {
 func (m *Middleware) Turnstile() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
-			if !m.turnstileEnabled {
-				return next(c)
-			}
-			if m.turnstileSiteKey == "" || m.turnstile.secretKey == "" {
-				return reject(c, http.StatusServiceUnavailable, "机器人校验未配置")
-			}
-			csrfToken, hasCSRFToken := m.csrfCookieToken(c)
-			if hasCSRFToken {
-				if expiresAt, ok := m.validHumanCookie(c, csrfToken); ok {
-					setTurnstileVerifiedHeader(c, expiresAt)
-					return next(c)
-				}
-			}
-
-			token := strings.TrimSpace(c.Request().Header.Get(turnstileHeader))
-			if token == "" {
-				return reject(c, http.StatusForbidden, "请先完成人机校验")
-			}
-			ok, err := m.turnstile.verify(c.Request().Context(), token)
-			if err != nil {
-				return reject(c, http.StatusBadGateway, "人机校验失败，请稍后重试")
-			}
-			if !ok {
-				return reject(c, http.StatusForbidden, "人机校验失败，请重试")
-			}
-			if hasCSRFToken {
-				m.setHumanCookie(c, csrfToken)
+			if err := m.ensureTurnstile(c, false); err != nil {
+				return err
 			}
 			return next(c)
 		}
 	}
+}
+
+func (m *Middleware) VerifyTurnstile(c *echo.Context) error {
+	if err := m.ensureTurnstile(c, true); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, server.Envelope{Message: "ok"})
+}
+
+func (m *Middleware) ensureTurnstile(c *echo.Context, requireCSRF bool) error {
+	if !m.turnstileEnabled {
+		return nil
+	}
+	if m.turnstileSiteKey == "" || m.turnstile.secretKey == "" {
+		return reject(c, http.StatusServiceUnavailable, "机器人校验未配置")
+	}
+	csrfToken, hasCSRFToken := m.csrfCookieToken(c)
+	if requireCSRF && !hasCSRFToken {
+		return rejectCSRF(c)
+	}
+	if hasCSRFToken {
+		if expiresAt, ok := m.validHumanCookie(c, csrfToken); ok {
+			setTurnstileVerifiedHeader(c, expiresAt)
+			return nil
+		}
+	}
+
+	token := strings.TrimSpace(c.Request().Header.Get(turnstileHeader))
+	if token == "" {
+		return reject(c, http.StatusForbidden, "请先完成人机校验")
+	}
+	ok, err := m.turnstile.verify(c.Request().Context(), token)
+	if err != nil {
+		return reject(c, http.StatusBadGateway, "人机校验失败，请稍后重试")
+	}
+	if !ok {
+		return reject(c, http.StatusForbidden, "人机校验失败，请重试")
+	}
+	if hasCSRFToken {
+		m.setHumanCookie(c, csrfToken)
+	}
+	return nil
 }
 
 func (m *Middleware) csrfCookieToken(c *echo.Context) (string, bool) {

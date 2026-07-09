@@ -123,6 +123,16 @@ export async function getTurnstileConfig(): Promise<{
   }
 }
 
+export async function verifyTurnstileToken(turnstileToken: string): Promise<void> {
+  await postJSON<void>(
+    "/api/turnstile/verify",
+    {},
+    {
+      turnstileToken,
+    }
+  )
+}
+
 export async function postJSON<T>(
   path: string,
   body: unknown,

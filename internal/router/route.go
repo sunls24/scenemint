@@ -18,6 +18,7 @@ func Register(e *echo.Echo, imageClient *image.Client, quotaStore *quota.Store, 
 	g.Use(sec.SourceGuard())
 	g.GET("/session", sec.Session)
 	g.GET("/status", server.WrapResp(handler.Status))
+	g.POST("/turnstile/verify", sec.VerifyTurnstile, security.BodyLimit(), sec.CSRF())
 	g.POST("/quota/status", server.Wrap(quotaStore.Status), security.BodyLimit(), sec.CSRF())
 	g.POST("/quota/check-in", server.Wrap(quotaStore.CheckIn), security.BodyLimit(), sec.CSRF(), botGuard)
 	g.POST("/prompts/enhance", imageClient.EnhancePrompt, security.BodyLimit(), sec.CSRF(), botGuard)
