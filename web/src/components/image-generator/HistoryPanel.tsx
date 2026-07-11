@@ -1,19 +1,15 @@
-import {
-  ImageIcon,
-  ListRestartIcon,
-  Trash2Icon,
-  XCircleIcon,
-} from "lucide-react"
+import { ImageIcon, ListRestartIcon, Trash2Icon, XCircleIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ImageHistory } from "@/lib/history"
 
@@ -45,60 +41,68 @@ export function HistoryPanel({
   onRemoveHistory,
 }: HistoryPanelProps) {
   return (
-    <Card className="scene-card lg:col-start-2 lg:col-span-1 xl:col-start-3 xl:row-start-1 xl:max-h-full xl:min-h-0 xl:overflow-hidden">
-      <CardHeader>
+    <Card
+      className="scene-history-panel scene-card min-h-[260px] gap-0 self-start py-0 lg:col-start-3 lg:row-start-1 lg:max-h-full lg:min-h-0"
+      role="region"
+      aria-labelledby="history-title"
+    >
+      <CardHeader className="scene-panel-heading shrink-0 border-b px-3.5 py-2.5">
         <div className="flex items-start justify-between gap-3">
-          <CardTitle className="text-[1.05rem]">{t.historyTitle}</CardTitle>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={onClearHistory}
-            disabled={history.length === 0}
-            title={t.clearHistoryLabel}
-            aria-label={t.clearHistoryLabel}
-          >
-            <Trash2Icon data-icon="inline-start" />
-            {t.clearHistory}
-          </Button>
-        </div>
-        <div className="flex items-center justify-between">
-          <CardDescription>{t.historyCount(history.length)}</CardDescription>
+          <div>
+            <div className="scene-panel-index" aria-hidden="true">03</div>
+            <h2 id="history-title" className="mt-0.5 text-lg font-semibold">
+              {t.historyTitle}
+            </h2>
+            <CardDescription className="mt-0.5 text-xs">
+              {t.historyCount(history.length)} · {t.historyRetention}
+            </CardDescription>
+          </div>
           {history.length > 0 && (
-            <span className="text-[0.7rem] text-muted-foreground">{t.historyRetention}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClearHistory}
+              title={t.clearHistoryLabel}
+              aria-label={t.clearHistoryLabel}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2Icon data-icon="inline-start" />
+              {t.clearHistory}
+            </Button>
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col">
-        <div className="scene-history-list flex max-h-[520px] flex-col gap-2 overflow-auto xl:min-h-0 xl:flex-1 xl:max-h-none">
+
+      <CardContent className="flex min-h-0 flex-1 p-2.5">
+        <div className="scene-history-list flex min-h-0 w-full flex-1 flex-col gap-2 overflow-y-auto">
           {history.length === 0 ? (
-            <div className="scene-history-row flex items-center gap-3 rounded-lg border p-2">
-              <span className="scene-empty-mark flex size-11 shrink-0 items-center justify-center rounded-lg">
-                <ImageIcon />
-              </span>
-              <p className="text-sm text-muted-foreground">{t.historyEmpty}</p>
-            </div>
+            <Empty className="scene-history-empty min-h-36 border-0 px-5">
+              <EmptyHeader>
+                <EmptyMedia variant="icon" className="scene-history-empty-mark size-10 rounded-full">
+                  <ImageIcon />
+                </EmptyMedia>
+                <EmptyTitle>{t.historyEmpty}</EmptyTitle>
+                <EmptyDescription>{t.historyEmptyDescription}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             history.map((item) => {
               const itemStatus = statusOf(item)
-              const itemActive =
-                itemStatus === "queued" || itemStatus === "running"
+              const itemActive = itemStatus === "queued" || itemStatus === "running"
               const itemImage = item.image
               const itemPreviewable = canOpenPreview(item)
               return (
-                <div
-                  key={item.id}
-                  className="scene-history-row flex w-full items-center gap-3 rounded-lg border p-2"
-                >
+                <article key={item.id} className="scene-history-row flex items-center gap-3 rounded-lg border p-2.5">
                   <button
                     type="button"
                     onClick={() => onOpenPreview(item)}
                     disabled={!itemPreviewable}
-                    className="flex aspect-square size-16 shrink-0 appearance-none items-center justify-center overflow-hidden rounded-md border-0 bg-transparent p-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default"
+                    className="flex aspect-square size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border-0 bg-muted p-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default"
                     aria-label={`${t.currentPreview}: ${item.prompt}`}
                   >
                     {itemActive ? (
-                      <Skeleton className="size-full" />
+                      <Skeleton className="size-full rounded-none" />
                     ) : itemStatus === "failed" ? (
                       <XCircleIcon className="text-muted-foreground" />
                     ) : itemImage ? (
@@ -116,51 +120,44 @@ export function HistoryPanel({
                       <ImageIcon className="text-muted-foreground" />
                     )}
                   </button>
-                  <span className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
-                    <span className="flex w-full min-w-0 items-center justify-between gap-1">
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {item.prompt}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={() => onReusePrompt(item.prompt)}
-                        disabled={reuseDisabled}
-                        title={t.reusePromptLabel}
-                        aria-label={`${t.reusePromptLabel}: ${item.prompt}`}
-                        className="shrink-0"
-                      >
-                        <ListRestartIcon data-icon="inline-start" />
-                      </Button>
-                    </span>
-                    <span className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground">
-                        <Badge variant="outline">{t.mode[item.mode]}</Badge>
-                        <Badge variant="secondary">
-                          {statusLabel(itemStatus, t)}
-                        </Badge>
-                        <span className="shrink-0">
-                          {sizeLabel(item.size, t)}
-                        </span>
-                      </span>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon-sm"
-                        onClick={() => onRemoveHistory(item.id)}
-                        title={t.removeHistoryLabel}
-                        aria-label={`${t.removeHistoryLabel}: ${item.prompt}`}
-                        className="scene-history-remove shrink-0 transition-opacity"
-                      >
-                        <Trash2Icon
-                          data-icon="inline-start"
-                          aria-hidden="true"
-                        />
-                      </Button>
-                    </span>
-                  </span>
-                </div>
+
+                  <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+                    <p className="line-clamp-2 min-w-0 text-sm leading-5 font-medium">
+                      {item.prompt}
+                    </p>
+                    <div className="flex flex-nowrap items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                      <Badge variant="outline" className="px-1.5">{t.mode[item.mode]}</Badge>
+                      <Badge variant="secondary" className="px-1.5">
+                        {statusLabel(itemStatus, t)}
+                      </Badge>
+                      <span className="shrink-0">{sizeLabel(item.size, t)}</span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onReusePrompt(item.prompt)}
+                      disabled={reuseDisabled}
+                      title={t.reusePromptLabel}
+                      aria-label={`${t.reusePromptLabel}: ${item.prompt}`}
+                    >
+                      <ListRestartIcon />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onRemoveHistory(item.id)}
+                      title={t.removeHistoryLabel}
+                      aria-label={`${t.removeHistoryLabel}: ${item.prompt}`}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  </div>
+                </article>
               )
             })
           )}

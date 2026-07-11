@@ -921,7 +921,7 @@ func TestGenerateRequiresChatGPT2APIConfig(t *testing.T) {
 			client: Client{
 				apiKey: "test-key",
 			},
-			want: "CHATGPT2API_BASE_URL 未配置",
+			want: "图片服务暂不可用，请稍后再试",
 		},
 		{
 			name: "missing api key",
@@ -929,7 +929,7 @@ func TestGenerateRequiresChatGPT2APIConfig(t *testing.T) {
 				openAIBaseURL: "http://127.0.0.1:3200/v1",
 				taskAPIRoot:   "http://127.0.0.1:3200",
 			},
-			want: "CHATGPT2API_API_KEY 未配置",
+			want: "图片服务暂不可用，请稍后再试",
 		},
 	}
 
@@ -1215,7 +1215,7 @@ func TestEnhancePromptValidatesRequest(t *testing.T) {
 			},
 			body:   `{"prompt":"quiet studio","direction":"details"}`,
 			status: http.StatusBadGateway,
-			want:   "CHATGPT2API_PROMPT_MODEL 未配置",
+			want:   "提示词服务暂不可用，请稍后再试",
 		},
 	}
 

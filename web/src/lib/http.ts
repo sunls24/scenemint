@@ -220,9 +220,13 @@ async function postWithCSRF(
   return resp
 }
 
-export async function getJSON<T>(path: string): Promise<T> {
+export async function getJSON<T>(
+  path: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<T> {
   const resp = await fetch(path, {
     credentials: "same-origin",
+    signal: options.signal,
   })
   const payload = await readEnvelope<T>(resp)
   return dataOrThrow(resp, payload)

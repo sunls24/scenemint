@@ -1,5 +1,5 @@
 import type { SVGProps } from "react"
-import { LanguagesIcon } from "lucide-react"
+import { ArrowUpRightIcon, LanguagesIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -36,8 +36,8 @@ export function BrandHeader({
   onLanguageChange,
 }: BrandHeaderProps) {
   return (
-    <header className="flex w-full flex-col gap-4 md:flex-row md:items-center md:justify-between xl:shrink-0">
-      <div className="scene-brand-lockup ml-1 flex items-center gap-3 md:ml-1.5 md:gap-4">
+    <header className="scene-topbar flex shrink-0 flex-col gap-3 border-b py-2.5 md:flex-row md:items-center md:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
         <img
           src="/brand-logo.png"
           alt=""
@@ -47,62 +47,55 @@ export function BrandHeader({
           draggable={false}
           loading="eager"
           decoding="async"
-          className="scene-brand-mark h-12 w-auto shrink-0 md:h-16"
+          className="scene-brand-mark h-11 w-auto shrink-0 sm:h-12"
         />
-        <div className="scene-brand-copy flex min-w-0 flex-col gap-2">
-          <h1 className="scene-brand-wordmark text-[1.58rem] font-bold leading-none tracking-normal md:text-[1.9rem]">
-            <span className="scene-brand-wordmark-main">Scene</span>
-            <span className="scene-brand-wordmark-accent">Mint</span>
-          </h1>
-          <p className="scene-brand-slogan max-w-2xl text-[0.88rem] font-medium leading-5 text-muted-foreground md:text-[0.95rem]">
+        <div className="min-w-0">
+          <div className="flex items-baseline">
+            <h1 className="scene-brand-wordmark truncate text-[1.45rem] font-semibold tracking-[-0.04em] sm:text-[1.65rem]">
+              SceneMint
+            </h1>
+          </div>
+          <p className="text-xs text-muted-foreground sm:text-sm">
             {t.appDescription}
           </p>
         </div>
       </div>
-      <div className="scene-header-actions flex flex-col items-start gap-1.5 md:items-end md:pb-1">
+
+      <div className="scene-topbar-actions flex min-w-0 flex-wrap items-center gap-1.5 md:justify-end">
+        <nav
+          className="scene-related-nav mr-auto flex items-center gap-1 md:mr-1"
+          aria-label={t.relatedLinksLabel}
+        >
+          <a href={relatedLinks.divination} target="_blank" rel="noreferrer">
+            {t.relatedLinks.divination}
+            <ArrowUpRightIcon aria-hidden="true" />
+          </a>
+          <a href={relatedLinks.tempMail} target="_blank" rel="noreferrer">
+            {t.relatedLinks.tempMail}
+            <ArrowUpRightIcon aria-hidden="true" />
+          </a>
+        </nav>
+
+        <Button
+          render={<a href={githubUrl} target="_blank" rel="noreferrer" />}
+          variant="ghost"
+          size="sm"
+          className="scene-utility-button"
+          aria-label={`SceneMint GitHub repository v${appVersion}`}
+        >
+          <GithubIcon data-icon="inline-start" aria-hidden="true" />
+          <span>v{appVersion}</span>
+        </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => onLanguageChange(language === "zh" ? "en" : "zh")}
-          className="bg-background/70 shadow-sm"
+          className="scene-utility-button"
         >
           <LanguagesIcon data-icon="inline-start" />
           {t.language}
         </Button>
-        <p className="font-mono flex w-full max-w-full flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs leading-5 text-muted-foreground/70 md:w-auto md:px-0 md:justify-end">
-          <a
-            href={relatedLinks.divination}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center rounded-sm text-primary/90 transition-colors hover:font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            {t.relatedLinks.divination}
-          </a>
-          <span aria-hidden="true">/</span>
-          <a
-            href={relatedLinks.tempMail}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center rounded-sm text-primary/90 transition-colors hover:font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            {t.relatedLinks.tempMail}
-          </a>
-          <span aria-hidden="true">/</span>
-          <a
-            href={githubUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            aria-label={`SceneMint GitHub repository v${appVersion}`}
-          >
-            <GithubIcon className="size-3.5" aria-hidden="true" />
-            GitHub
-            <span>v{appVersion}</span>
-          </a>
-          <span aria-hidden="true">/</span>
-          <span>Vibe coding by Codex App</span>
-        </p>
       </div>
     </header>
   )

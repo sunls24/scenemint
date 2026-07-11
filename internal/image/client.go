@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -248,7 +249,8 @@ func (c *Client) Task(ctx context.Context) (GenerateResponse, error) {
 
 func (c *Client) ProxyImage(ec *echo.Context) error {
 	if msg := c.configErrorMessage(); msg != "" {
-		return imageProxyError(ec, http.StatusBadGateway, msg)
+		slog.Error("图片服务配置错误", "detail", msg)
+		return imageProxyError(ec, http.StatusBadGateway, "图片服务暂不可用，请稍后再试")
 	}
 	id := strings.TrimSpace(ec.Param("id"))
 	if id == "" {
@@ -296,7 +298,7 @@ func (c *Client) ProxyImage(ec *echo.Context) error {
 
 func (c *Client) validateConfig() error {
 	if msg := c.configErrorMessage(); msg != "" {
-		return server.ErrMsg(msg)
+		return server.ErrMsg("图片服务暂不可用，请稍后再试").WithErr(errors.New(msg))
 	}
 	return nil
 }

@@ -1,5 +1,7 @@
 import { persistentAtom } from "@nanostores/persistent"
 
+import { isRecordExpired, maxHistoryItems } from "@/lib/imagePolicy"
+
 export type ImageStatus = "queued" | "running" | "completed" | "failed"
 
 export type ImageHistory = {
@@ -16,8 +18,6 @@ export type ImageHistory = {
   updatedAt?: string
 }
 
-const maxHistoryItems = 24
-
 function uniqueHistory(items: ImageHistory[]) {
   const seen = new Set<string>()
   const next: ImageHistory[] = []
@@ -31,12 +31,52 @@ function uniqueHistory(items: ImageHistory[]) {
   return next.slice(0, maxHistoryItems)
 }
 
+function isHistoryItem(value: unknown): value is ImageHistory {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+  const item = value as Partial<ImageHistory>
+  return (
+    typeof item.id === "string" &&
+    typeof item.prompt === "string" &&
+    typeof item.size === "string" &&
+    typeof item.createdAt === "string" &&
+    (item.mode === "text" || item.mode === "image")
+  )
+}
+
+function decodeHistory(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return uniqueHistory(
+      parsed.filter(isHistoryItem).filter((item) => !isRecordExpired(item.createdAt))
+    )
+  } catch {
+    return []
+  }
+}
+
+function decodeCurrentTask(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!isHistoryItem(parsed) || isRecordExpired(parsed.createdAt)) {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export const $history = persistentAtom<ImageHistory[]>(
   "scenemint:history",
   [],
   {
     encode: JSON.stringify,
-    decode: JSON.parse,
+    decode: decodeHistory,
   }
 )
 
@@ -45,7 +85,7 @@ export const $currentTask = persistentAtom<ImageHistory | null>(
   null,
   {
     encode: JSON.stringify,
-    decode: JSON.parse,
+    decode: decodeCurrentTask,
   }
 )
 
@@ -98,4 +138,8 @@ export function updateTask(id: string, patch: Partial<ImageHistory>) {
 
 export function clearHistory() {
   $history.set([])
+}
+
+export function restoreHistory(items: ImageHistory[]) {
+  $history.set(uniqueHistory([...$history.get(), ...items]))
 }

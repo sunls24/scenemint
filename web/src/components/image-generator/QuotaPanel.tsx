@@ -1,10 +1,4 @@
-import {
-  FingerprintIcon,
-  GiftIcon,
-  Loader2Icon,
-  RotateCcwIcon,
-  ScanLineIcon,
-} from "lucide-react"
+import { CircleGaugeIcon, GiftIcon, Loader2Icon, RotateCcwIcon } from "lucide-react"
 import type { CSSProperties } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -22,7 +16,6 @@ export type QuotaStatus = {
 type QuotaPanelProps = {
   t: ImageGeneratorCopy
   status: QuotaStatus | null
-  fingerprint: string
   loading: boolean
   signingIn: boolean
   error: string
@@ -30,17 +23,9 @@ type QuotaPanelProps = {
   onRetry: () => void
 }
 
-function fingerprintPreview(fingerprint: string) {
-  if (fingerprint.length <= 12) {
-    return fingerprint
-  }
-  return `${fingerprint.slice(0, 6)}...${fingerprint.slice(-4)}`
-}
-
 export function QuotaPanel({
   t,
   status,
-  fingerprint,
   loading,
   signingIn,
   error,
@@ -49,103 +34,68 @@ export function QuotaPanel({
 }: QuotaPanelProps) {
   const balance = status?.balance ?? 0
   const cap = status?.cap ?? 100
-  const description = status
-    ? t.quota.description(status.dailyGrant)
-    : t.quota.descriptionFallback
   const fill = cap > 0 ? Math.max(0, Math.min(100, (balance / cap) * 100)) : 0
   const atCap = Boolean(status && status.balance >= status.cap)
-  const checkInDisabled =
-    loading ||
-    signingIn ||
-    Boolean(error) ||
-    !status ||
-    status.signedToday
-  const checkInLabel = signingIn
-    ? t.quota.signingIn
-    : status?.signedToday
-      ? t.quota.signed
-      : atCap
-        ? t.quota.full
-        : t.quota.checkIn
-
-  const statusText = error || description
-
+  const showCheckIn = Boolean(
+    status && !status.signedToday && !atCap
+  )
   return (
-    <div className="scene-quota-strip rounded-lg border px-2.5 py-1.5">
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="scene-quota-strip-mark flex size-5 shrink-0 items-center justify-center rounded-md">
-            {loading ? <ScanLineIcon /> : <GiftIcon />}
+    <section className="scene-quota-panel rounded-lg border p-2.5" aria-label={t.quota.remaining}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="scene-quota-icon flex size-7 shrink-0 items-center justify-center rounded-md">
+            <CircleGaugeIcon aria-hidden="true" />
           </span>
-
-          {loading ? (
-            <Skeleton className="h-3.5 w-28 rounded-4xl" />
-          ) : (
-            <p className="min-w-0 truncate text-xs leading-none font-semibold text-foreground">
-              {statusText}
-            </p>
-          )}
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="text-[0.68rem] font-medium text-muted-foreground">
+              {t.quota.remaining}
+            </span>
+            {loading ? (
+              <Skeleton className="h-4 w-14" />
+            ) : (
+              <span className="flex items-baseline gap-1">
+                <span className="text-lg leading-none font-semibold tabular-nums">{balance}</span>
+                <span className="text-xs text-muted-foreground">/ {cap}</span>
+              </span>
+            )}
+          </div>
         </div>
 
         {error ? (
+          <Button type="button" size="xs" variant="outline" onClick={onRetry} disabled={loading}>
+            <RotateCcwIcon data-icon="inline-start" />
+            {t.quota.retry}
+          </Button>
+        ) : showCheckIn ? (
           <Button
             type="button"
             size="xs"
             variant="outline"
-            disabled={loading}
-            onClick={onRetry}
-            className="shrink-0"
-          >
-            <RotateCcwIcon data-icon="inline-start" />
-            {t.quota.retry}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="xs"
-            variant={status?.signedToday || atCap ? "secondary" : "default"}
-            disabled={checkInDisabled}
+            disabled={signingIn || atCap}
             onClick={onCheckIn}
-            className="shrink-0"
           >
             {signingIn ? (
               <Loader2Icon data-icon="inline-start" className="animate-spin" />
             ) : (
               <GiftIcon data-icon="inline-start" />
             )}
-            {checkInLabel}
+            {t.quota.checkIn} +{status?.dailyGrant ?? 0}
           </Button>
-        )}
+        ) : status?.signedToday || atCap ? (
+          <span className="scene-quota-state">
+            {status?.signedToday ? t.quota.signed : t.quota.full}
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-1.5 flex min-h-[1.41rem] min-w-0 items-center gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <div className="scene-quota-meter min-w-8 flex-1" aria-hidden="true">
-            <span style={{ "--quota-fill": `${fill}%` } as CSSProperties} />
-          </div>
-          {loading ? (
-            <Skeleton className="h-3 w-10 shrink-0 rounded-4xl" />
-          ) : (
-            <span className="shrink-0 text-[0.66rem] leading-none font-medium text-muted-foreground tabular-nums">
-              {balance}/{cap}
-            </span>
-          )}
-        </div>
-
-        {loading ? (
-          <Skeleton className="h-[1.41rem] w-30 shrink-0 rounded-md" />
-        ) : fingerprint ? (
-          <span className="scene-fingerprint-preview inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[0.68rem] leading-none font-medium tabular-nums">
-            <FingerprintIcon aria-hidden="true" />
-            <span>{fingerprintPreview(fingerprint)}</span>
-          </span>
-        ) : (
-          <span className="scene-fingerprint-preview inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[0.68rem] leading-none font-medium">
-            <FingerprintIcon aria-hidden="true" />
-            <span>{t.quota.unavailable}</span>
-          </span>
-        )}
+      <div className="scene-quota-meter mt-1.5" aria-hidden="true">
+        <span style={{ "--quota-fill": `${fill}%` } as CSSProperties} />
       </div>
-    </div>
+      {error && (
+        <p className="mt-1 truncate text-[0.68rem] leading-4 text-destructive" title={error}>
+          {error}
+        </p>
+      )}
+    </section>
   )
 }

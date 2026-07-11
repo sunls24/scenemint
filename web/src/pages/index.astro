@@ -32,12 +32,12 @@ const structuredData = {
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="dns-prefetch" href="//challenges.cloudflare.com" />
     <link rel="preconnect" href="https://challenges.cloudflare.com" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta name="application-name" content="SceneMint" />
     <meta name="description" content={siteDescription} />
     <meta name="robots" content="index,follow" />
-    <meta name="theme-color" content="#f7fbf9" />
+    <meta name="theme-color" content="#f7f5ef" />
     <meta property="og:title" content={siteTitle} />
     <meta property="og:description" content={siteDescription} />
     <meta property="og:type" content="website" />
@@ -57,12 +57,29 @@ const structuredData = {
       src="https://static.cloudflareinsights.com/beacon.min.js"
       data-cf-beacon='{"token": "82e9b6f424234f19a16c1bc554f3ca41"}'></script>
   </head>
-  <body class="min-h-dvh overflow-x-hidden bg-background text-foreground antialiased xl:flex xl:h-dvh xl:flex-col xl:overflow-hidden">
+  <body class="min-h-dvh overflow-x-hidden bg-background text-foreground antialiased">
     <ImageGenerator
       appVersion={appVersion}
       githubUrl={githubUrl}
       relatedLinks={relatedLinks}
       client:only="react"
-    />
+    >
+      <main slot="fallback" class="scene-page min-h-dvh w-full p-4 text-foreground">
+        <div class="mx-auto flex w-full max-w-[1540px] animate-pulse flex-col gap-3">
+          <div class="flex items-center gap-3 border-b pb-3">
+            <img src="/brand-logo.png" alt="" width="296" height="256" class="h-11 w-auto opacity-70" />
+            <div>
+              <div class="h-5 w-28 rounded bg-muted"></div>
+              <div class="mt-2 h-3 w-36 rounded bg-muted"></div>
+            </div>
+          </div>
+          <div class="grid min-h-[70dvh] gap-3 lg:grid-cols-[330px_minmax(0,1fr)] xl:grid-cols-[350px_minmax(0,1fr)_330px]">
+            <div class="rounded-xl border bg-card"></div>
+            <div class="min-h-[420px] rounded-xl border bg-card"></div>
+            <div class="min-h-48 rounded-xl border bg-card"></div>
+          </div>
+        </div>
+      </main>
+    </ImageGenerator>
   </body>
 </html>

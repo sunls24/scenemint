@@ -293,13 +293,6 @@ export function useTurnstile() {
     }
   }, [requestToken, waitUntilReady])
 
-  useEffect(() => {
-    if (!configReady || !enabled || error || !ready || isTurnstileVerified()) {
-      return
-    }
-    void ensureVerified().catch(() => undefined)
-  }, [configReady, enabled, ensureVerified, error, ready])
-
   return {
     interactive,
     containerRef,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -50,7 +51,8 @@ func (c *Client) EnhancePrompt(ec *echo.Context) error {
 		return promptError(ec, http.StatusBadRequest, "提示词增强方向不支持")
 	}
 	if msg := c.promptConfigErrorMessage(); msg != "" {
-		return promptError(ec, http.StatusBadGateway, msg)
+		slog.Error("提示词服务配置错误", "detail", msg)
+		return promptError(ec, http.StatusBadGateway, "提示词服务暂不可用，请稍后再试")
 	}
 
 	reader, err := c.submitPromptEnhancement(ec.Request().Context(), req)

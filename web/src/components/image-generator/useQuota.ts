@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { getVisitorFingerprint } from "@/lib/fingerprint"
@@ -18,27 +18,39 @@ export function useQuota(t: ImageGeneratorCopy, options: UseQuotaOptions = {}) {
   const [quotaLoading, setQuotaLoading] = useState(true)
   const [quotaError, setQuotaError] = useState("")
   const [signingIn, setSigningIn] = useState(false)
-
-  const quotaReady = Boolean(fingerprint && quotaStatus && !quotaLoading)
-  const hasCredits = (quotaStatus?.balance ?? 0) > 0
+  const refreshPromiseRef = useRef<Promise<QuotaStatus | undefined> | null>(null)
 
   const refreshQuota = useCallback(
     async (fingerprintValue = fingerprint) => {
       if (!fingerprintValue) {
         return undefined
       }
+      if (refreshPromiseRef.current) {
+        return refreshPromiseRef.current
+      }
       setQuotaLoading(true)
+
+      const request = (async () => {
+        try {
+          const status = await postJSON<QuotaStatus>("/api/quota/status", {
+            fingerprint: fingerprintValue,
+          })
+          setQuotaStatus(status)
+          setQuotaError("")
+          return status
+        } catch (err) {
+          setQuotaError(err instanceof Error ? err.message : t.quota.loadFailed)
+          return undefined
+        }
+      })()
+      refreshPromiseRef.current = request
+
       try {
-        const status = await postJSON<QuotaStatus>("/api/quota/status", {
-          fingerprint: fingerprintValue,
-        })
-        setQuotaStatus(status)
-        setQuotaError("")
-        return status
-      } catch (err) {
-        setQuotaError(err instanceof Error ? err.message : t.quota.loadFailed)
-        return undefined
+        return await request
       } finally {
+        if (refreshPromiseRef.current === request) {
+          refreshPromiseRef.current = null
+        }
         setQuotaLoading(false)
       }
     },
@@ -138,8 +150,6 @@ export function useQuota(t: ImageGeneratorCopy, options: UseQuotaOptions = {}) {
     quotaLoading,
     quotaError,
     signingIn,
-    quotaReady,
-    hasCredits,
     checkIn,
     retryQuota,
     applyRemainingCredits,

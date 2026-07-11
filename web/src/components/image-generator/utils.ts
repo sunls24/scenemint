@@ -1,8 +1,7 @@
 import type { ImageHistory, ImageStatus } from "@/lib/history"
+import { isRecordExpired } from "@/lib/imagePolicy"
 
-import { imageRetentionDays, type ImageGeneratorCopy } from "./copy"
-
-const imageRetentionMs = imageRetentionDays * 24 * 60 * 60 * 1000
+import type { ImageGeneratorCopy } from "./copy"
 
 /** 通过 fetch blob 下载图片，失败时在新标签页打开 */
 export async function downloadImage(url: string, filename: string) {
@@ -52,8 +51,7 @@ export function canPreview(
 }
 
 export function isImageExpired(item: ImageHistory) {
-  const createdAt = Date.parse(item.createdAt)
-  return Number.isFinite(createdAt) && Date.now() - createdAt >= imageRetentionMs
+  return isRecordExpired(item.createdAt)
 }
 
 export function dimensionsOf(size: string) {
