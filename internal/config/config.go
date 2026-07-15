@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -22,10 +24,9 @@ type ChatGPT2API struct {
 
 type Security struct {
 	SecureCookies      bool          `env:"SECURE_COOKIES" envDefault:"false"`
-	TurnstileEnabled   bool          `env:"TURNSTILE_ENABLED" envDefault:"false"`
 	TurnstileSiteKey   string        `env:"TURNSTILE_SITE_KEY"`
 	TurnstileSecretKey string        `env:"TURNSTILE_SECRET_KEY"`
-	TurnstileHumanTTL  time.Duration `env:"TURNSTILE_HUMAN_TTL"`
+	TurnstileCookieTTL time.Duration `env:"TURNSTILE_COOKIE_TTL" envDefault:"6h"`
 }
 
 func MustNew() *Config {
@@ -33,5 +34,17 @@ func MustNew() *Config {
 	if err := env.Parse(&cfg); err != nil {
 		panic(err)
 	}
+	cfg.Security.TurnstileSiteKey = strings.TrimSpace(cfg.Security.TurnstileSiteKey)
+	cfg.Security.TurnstileSecretKey = strings.TrimSpace(cfg.Security.TurnstileSecretKey)
+	if (cfg.Security.TurnstileSiteKey == "") != (cfg.Security.TurnstileSecretKey == "") {
+		panic("SECURITY_TURNSTILE_SITE_KEY and SECURITY_TURNSTILE_SECRET_KEY must be set together")
+	}
+	if cfg.Security.TurnstileEnabled() && cfg.Security.TurnstileCookieTTL <= 0 {
+		panic(fmt.Sprintf("invalid SECURITY_TURNSTILE_COOKIE_TTL: %s", cfg.Security.TurnstileCookieTTL))
+	}
 	return &cfg
+}
+
+func (c Security) TurnstileEnabled() bool {
+	return c.TurnstileSiteKey != "" && c.TurnstileSecretKey != ""
 }

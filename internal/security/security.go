@@ -17,38 +17,31 @@ import (
 )
 
 const (
-	csrfCookieName  = "_scenemint_csrf"
-	csrfErrorHeader = "X-SceneMint-CSRF-Error"
-	csrfTokenBytes  = 32
-	maxBodyBytes    = 16 << 20
-	defaultHumanTTL = 6 * time.Hour
+	csrfCookieName        = "_scenemint_csrf"
+	csrfErrorHeader       = "X-SceneMint-CSRF-Error"
+	csrfTokenBytes        = 32
+	maxBodyBytes          = 16 << 20
+	maxTurnstileBodyBytes = 4 << 10
 )
 
 type SessionResponse struct {
-	CSRFToken              string `json:"csrfToken"`
-	TurnstileEnabled       bool   `json:"turnstileEnabled"`
-	TurnstileSiteKey       string `json:"turnstileSiteKey,omitempty"`
-	TurnstileVerifiedUntil string `json:"turnstileVerifiedUntil,omitempty"`
+	CSRFToken string `json:"csrfToken"`
 }
 
 type Middleware struct {
 	secureCookies    bool
 	turnstileEnabled bool
 	turnstileSiteKey string
-	humanTTL         time.Duration
+	turnstileTTL     time.Duration
 	turnstile        *turnstileVerifier
 }
 
 func New(cfg config.Security) *Middleware {
-	humanTTL := cfg.TurnstileHumanTTL
-	if humanTTL <= 0 {
-		humanTTL = defaultHumanTTL
-	}
 	return &Middleware{
 		secureCookies:    cfg.SecureCookies,
-		turnstileEnabled: cfg.TurnstileEnabled,
-		turnstileSiteKey: strings.TrimSpace(cfg.TurnstileSiteKey),
-		humanTTL:         humanTTL,
+		turnstileEnabled: cfg.TurnstileEnabled(),
+		turnstileSiteKey: cfg.TurnstileSiteKey,
+		turnstileTTL:     cfg.TurnstileCookieTTL,
 		turnstile:        newTurnstileVerifier(cfg.TurnstileSecretKey),
 	}
 }
@@ -64,6 +57,10 @@ func Headers() echo.MiddlewareFunc {
 
 func BodyLimit() echo.MiddlewareFunc {
 	return middleware.BodyLimit(maxBodyBytes)
+}
+
+func TurnstileBodyLimit() echo.MiddlewareFunc {
+	return middleware.BodyLimit(maxTurnstileBodyBytes)
 }
 
 func (m *Middleware) SourceGuard() echo.MiddlewareFunc {
@@ -98,18 +95,10 @@ func (m *Middleware) Session(c *echo.Context) error {
 	if err != nil {
 		return reject(c, http.StatusInternalServerError, "会话创建失败")
 	}
-	var verifiedUntil string
-	if expiresAt, ok := m.validHumanCookie(c, token); ok {
-		verifiedUntil = expiresAt.Format(time.RFC3339)
-		setTurnstileVerifiedHeader(c, expiresAt)
-	}
 	return c.JSON(http.StatusOK, server.Envelope{
 		Message: "ok",
 		Data: SessionResponse{
-			CSRFToken:              token,
-			TurnstileEnabled:       m.turnstileEnabled,
-			TurnstileSiteKey:       m.turnstileSiteKey,
-			TurnstileVerifiedUntil: verifiedUntil,
+			CSRFToken: token,
 		},
 	})
 }

@@ -124,11 +124,6 @@
 
 .scene-page {
   background-color: var(--background);
-  background-image:
-    linear-gradient(oklch(0.46 0.012 102 / 2%) 1px, transparent 1px),
-    linear-gradient(90deg, oklch(0.46 0.012 102 / 2%) 1px, transparent 1px);
-  background-position: -1px -1px;
-  background-size: 48px 48px;
 }
 
 .scene-shell {
@@ -147,10 +142,6 @@
 
 .scene-brand-wordmark {
   color: var(--scene-ink);
-}
-
-.scene-panel-index {
-  color: oklch(0.51 0.052 158);
 }
 
 .scene-related-nav a {
@@ -193,21 +184,23 @@
   border: 1px solid var(--scene-rule);
   border-radius: 1rem;
   background: var(--scene-paper);
-  box-shadow:
-    0 1px 2px oklch(0.3 0.025 157 / 3%),
-    0 12px 32px oklch(0.3 0.025 157 / 3.5%);
+  box-shadow: none;
+}
+
+.scene-canvas-panel {
+  border: 0;
+  background: var(--scene-paper-strong);
+  box-shadow: 0 2px 8px oklch(0.3 0.025 157 / 8%);
+}
+
+.scene-history-panel {
+  background: transparent;
 }
 
 .scene-panel-heading {
   padding-bottom: 0.625rem !important;
   border-color: var(--scene-rule);
   background: var(--scene-paper);
-}
-
-.scene-panel-index {
-  font-size: 0.64rem;
-  font-weight: 650;
-  letter-spacing: 0.1em;
 }
 
 .scene-controls-scroll {
@@ -701,6 +694,10 @@
   .scene-history-list {
     overflow-y: visible;
     overscroll-behavior: auto;
+  }
+
+  .scene-canvas-panel {
+    scroll-margin-top: 0.75rem;
   }
 }
 

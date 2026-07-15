@@ -16,10 +16,7 @@ import {
   persistSize,
 } from "./preferences"
 
-export function useCreationDraft(
-  t: ImageGeneratorCopy,
-  ensureTurnstileVerified: () => Promise<void>
-) {
+export function useCreationDraft(t: ImageGeneratorCopy) {
   const promptInputRef = useRef<HTMLTextAreaElement>(null)
   const referenceInputRef = useRef<HTMLInputElement>(null)
   const referencePreviewURLRef = useRef("")
@@ -90,7 +87,6 @@ export function useCreationDraft(
 
     let enhancedPrompt = ""
     try {
-      await ensureTurnstileVerified()
       const stream = await postStream(
         "/api/prompts/enhance",
         {

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react"
+import type { CSSProperties, Ref } from "react"
 import {
   DownloadIcon,
   ImageIcon,
@@ -26,6 +26,7 @@ import { FallbackImage } from "./FallbackImage"
 import { dimensionsOf, downloadImage, sizeLabel, statusLabel, statusOf } from "./utils"
 
 type CurrentImagePanelProps = {
+  panelRef?: Ref<HTMLDivElement>
   t: ImageGeneratorCopy
   selectedSize: string
   currentTask: ImageHistory | null
@@ -38,6 +39,7 @@ type CurrentImagePanelProps = {
 }
 
 export function CurrentImagePanel({
+  panelRef,
   t,
   selectedSize,
   currentTask,
@@ -98,6 +100,7 @@ export function CurrentImagePanel({
 
   return (
     <Card
+      ref={panelRef}
       className={cn(
         "scene-canvas-panel scene-card min-h-0 self-start gap-0 py-0",
         canvasModeClass
@@ -108,8 +111,7 @@ export function CurrentImagePanel({
       <CardHeader className="scene-panel-heading shrink-0 border-b px-3.5 py-2.5">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5">
           <div className="min-w-0">
-            <div className="scene-panel-index" aria-hidden="true">02</div>
-            <h2 id="current-image-title" className="mt-0.5 text-lg font-semibold">
+            <h2 id="current-image-title" className="text-lg font-semibold">
               {t.currentTitle}
             </h2>
           </div>

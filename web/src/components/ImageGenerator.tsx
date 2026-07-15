@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react"
+import { lazy, Suspense, useEffect, useRef } from "react"
 
 import { Toaster } from "@/components/ui/sonner"
 import {
@@ -10,7 +10,6 @@ import { GeneratorForm } from "@/components/image-generator/GeneratorForm"
 import { HistoryPanel } from "@/components/image-generator/HistoryPanel"
 import { QuotaPanel } from "@/components/image-generator/QuotaPanel"
 import { useImageGeneratorController } from "@/components/image-generator/useImageGeneratorController"
-import { cn } from "@/lib/utils"
 
 const ImagePreviewLightbox = lazy(
   () => import("@/components/image-generator/ImagePreviewLightbox")
@@ -29,30 +28,32 @@ export function ImageGenerator({
 }: ImageGeneratorProps) {
   const controller = useImageGeneratorController()
   const { t } = controller
+  const currentImagePanelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (
+      !controller.submittingPreview ||
+      !window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      return
+    }
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches
+    const frame = window.requestAnimationFrame(() => {
+      currentImagePanelRef.current?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [controller.submittingPreview])
 
   return (
     <main className="scene-page min-h-dvh w-full text-foreground">
       <Toaster richColors position="top-right" />
-      <div
-        className={cn(
-          "fixed inset-0 z-[2147483647] flex items-center justify-center p-4 transition-colors duration-150",
-          controller.turnstile.interactive
-            ? "bg-background/80 backdrop-blur-sm"
-            : "pointer-events-none bg-transparent"
-        )}
-        aria-hidden={!controller.turnstile.interactive}
-      >
-        <div
-          ref={controller.turnstile.containerRef}
-          className={cn(
-            "min-h-[65px] min-w-[300px] max-w-[calc(100vw-2rem)] transition duration-150",
-            controller.turnstile.interactive
-              ? "scale-100 opacity-100"
-              : "scale-95 opacity-0"
-          )}
-        />
-      </div>
-
       <div className="scene-shell mx-auto flex min-h-dvh w-full max-w-[1540px] flex-col px-3 py-3 sm:px-5 sm:py-4 lg:h-dvh lg:min-h-0 lg:overflow-hidden xl:px-6">
         <BrandHeader
           appVersion={appVersion}
@@ -100,6 +101,7 @@ export function ImageGenerator({
           />
 
           <CurrentImagePanel
+            panelRef={currentImagePanelRef}
             t={t}
             selectedSize={controller.size}
             currentTask={controller.currentTask}

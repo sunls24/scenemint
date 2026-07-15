@@ -88,8 +88,7 @@ export function GeneratorForm({
       aria-labelledby="creation-controls-title"
     >
       <div className="scene-panel-heading shrink-0 border-b px-3.5 py-2.5">
-        <div className="scene-panel-index" aria-hidden="true">01</div>
-        <h2 id="creation-controls-title" className="mt-0.5 text-lg font-semibold">
+        <h2 id="creation-controls-title" className="text-lg font-semibold">
           {t.controlsTitle}
         </h2>
       </div>

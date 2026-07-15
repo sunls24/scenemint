@@ -58,28 +58,142 @@ const structuredData = {
       data-cf-beacon='{"token": "82e9b6f424234f19a16c1bc554f3ca41"}'></script>
   </head>
   <body class="min-h-dvh overflow-x-hidden bg-background text-foreground antialiased">
-    <ImageGenerator
-      appVersion={appVersion}
-      githubUrl={githubUrl}
-      relatedLinks={relatedLinks}
-      client:only="react"
+    <div
+      id="turnstileGate"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-background px-4"
     >
-      <main slot="fallback" class="scene-page min-h-dvh w-full p-4 text-foreground">
-        <div class="mx-auto flex w-full max-w-[1540px] animate-pulse flex-col gap-3">
-          <div class="flex items-center gap-3 border-b pb-3">
-            <img src="/brand-logo.png" alt="" width="296" height="256" class="h-11 w-auto opacity-70" />
-            <div>
-              <div class="h-5 w-28 rounded bg-muted"></div>
-              <div class="mt-2 h-3 w-36 rounded bg-muted"></div>
+      <div class="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+        <img
+          src="/brand-logo.png"
+          alt=""
+          width="296"
+          height="256"
+          class="h-14 w-auto opacity-80"
+        />
+        <p class="text-sm text-muted-foreground">正在进行人机验证…</p>
+        <div id="turnstileWidget" class="min-h-16 w-full max-w-[300px]"></div>
+        <button
+          id="turnstileRetry"
+          type="button"
+          class="hidden h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          重新加载
+        </button>
+      </div>
+    </div>
+
+    <div id="appShell" class="contents" aria-hidden="true" inert>
+      <ImageGenerator
+        appVersion={appVersion}
+        githubUrl={githubUrl}
+        relatedLinks={relatedLinks}
+        client:only="react"
+      >
+        <main slot="fallback" class="scene-page min-h-dvh w-full p-4 text-foreground">
+          <div class="mx-auto flex w-full max-w-[1540px] animate-pulse flex-col gap-3">
+            <div class="flex items-center gap-3 border-b pb-3">
+              <img src="/brand-logo.png" alt="" width="296" height="256" class="h-11 w-auto opacity-70" />
+              <div>
+                <div class="h-5 w-28 rounded bg-muted"></div>
+                <div class="mt-2 h-3 w-36 rounded bg-muted"></div>
+              </div>
+            </div>
+            <div class="grid min-h-[70dvh] gap-3 lg:grid-cols-[330px_minmax(0,1fr)] xl:grid-cols-[350px_minmax(0,1fr)_330px]">
+              <div class="rounded-xl border bg-card"></div>
+              <div class="min-h-[420px] rounded-xl border bg-card"></div>
+              <div class="min-h-48 rounded-xl border bg-card"></div>
             </div>
           </div>
-          <div class="grid min-h-[70dvh] gap-3 lg:grid-cols-[330px_minmax(0,1fr)] xl:grid-cols-[350px_minmax(0,1fr)_330px]">
-            <div class="rounded-xl border bg-card"></div>
-            <div class="min-h-[420px] rounded-xl border bg-card"></div>
-            <div class="min-h-48 rounded-xl border bg-card"></div>
-          </div>
-        </div>
-      </main>
-    </ImageGenerator>
+        </main>
+      </ImageGenerator>
+    </div>
   </body>
 </html>
+
+<style>
+  body:not([data-turnstile-verified]) #appShell {
+    visibility: hidden;
+  }
+
+  body[data-turnstile-verified] #turnstileGate {
+    display: none;
+  }
+</style>
+
+<script is:inline>
+  const appShell = document.getElementById("appShell")
+  const retry = document.getElementById("turnstileRetry")
+  const widget = document.getElementById("turnstileWidget")
+
+  retry.addEventListener("click", () => window.location.reload())
+
+  function showFailure() {
+    retry.classList.remove("hidden")
+  }
+
+  function revealApp() {
+    document.body.setAttribute("data-turnstile-verified", "")
+    appShell.removeAttribute("inert")
+    appShell.setAttribute("aria-hidden", "false")
+  }
+
+  function loadTurnstile() {
+    return new Promise((resolve, reject) => {
+      if (window.turnstile) {
+        resolve()
+        return
+      }
+
+      const script = document.createElement("script")
+      script.src =
+        "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+      script.onload = resolve
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
+  }
+
+  async function verifyToken(token, widgetId) {
+    const response = await fetch("/api/turnstile/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+    const body = await response.json()
+    if (!response.ok || body.code !== 0) {
+      window.turnstile.reset(widgetId)
+      throw new Error(body.message || response.statusText)
+    }
+    window.location.reload()
+  }
+
+  async function startVerification(siteKey) {
+    await loadTurnstile()
+    let widgetId
+    widgetId = window.turnstile.render(widget, {
+      sitekey: siteKey,
+      size: "normal",
+      language: "zh-CN",
+      callback: (token) => verifyToken(token, widgetId).catch(showFailure),
+      "error-callback": showFailure,
+      "expired-callback": () => window.turnstile.reset(widgetId),
+    })
+  }
+
+  async function checkVerification() {
+    const response = await fetch("/api/turnstile/status", {
+      cache: "no-store",
+    })
+    const body = await response.json()
+    if (!response.ok || body.code !== 0) {
+      throw new Error(body.message || response.statusText)
+    }
+    if (!body.data.enabled || body.data.verified) {
+      revealApp()
+      return
+    }
+    await startVerification(body.data.siteKey)
+  }
+
+  checkVerification().catch(showFailure)
+</script>

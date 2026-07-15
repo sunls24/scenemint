@@ -49,8 +49,7 @@ export function HistoryPanel({
       <CardHeader className="scene-panel-heading shrink-0 border-b px-3.5 py-2.5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="scene-panel-index" aria-hidden="true">03</div>
-            <h2 id="history-title" className="mt-0.5 text-lg font-semibold">
+            <h2 id="history-title" className="text-lg font-semibold">
               {t.historyTitle}
             </h2>
             <CardDescription className="mt-0.5 text-xs">

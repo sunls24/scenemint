@@ -6,23 +6,17 @@ type APIEnvelope<T> = {
 
 type SessionResponse = {
   csrfToken: string
-  turnstileEnabled?: boolean
-  turnstileSiteKey?: string
-  turnstileVerifiedUntil?: string
 }
 
 type PostOptions = {
   refreshed?: boolean
   signal?: AbortSignal
-  turnstileToken?: string
 }
 
 const csrfErrorHeader = "X-SceneMint-CSRF-Error"
-const turnstileVerifiedHeader = "X-SceneMint-Turnstile-Verified-Until"
 
 let session: SessionResponse | undefined
 let sessionPromise: Promise<SessionResponse> | undefined
-let turnstileVerifiedUntil = 0
 
 async function readEnvelope<T>(resp: Response): Promise<APIEnvelope<T> | undefined> {
   const text = await resp.text()
@@ -52,30 +46,6 @@ function dataOrThrow<T>(resp: Response, payload: APIEnvelope<T> | undefined): T 
   return payload.data as T
 }
 
-function updateTurnstileVerification(
-  value: string | null | undefined,
-  clearMissing = false
-) {
-  if (!value) {
-    if (clearMissing) {
-      turnstileVerifiedUntil = 0
-    }
-    return
-  }
-  const parsed = Date.parse(value)
-  if (Number.isFinite(parsed) && parsed > Date.now()) {
-    turnstileVerifiedUntil = parsed
-    return
-  }
-  if (clearMissing) {
-    turnstileVerifiedUntil = 0
-  }
-}
-
-export function isTurnstileVerified() {
-  return turnstileVerifiedUntil > Date.now()
-}
-
 async function fetchSession(refresh = false): Promise<SessionResponse> {
   if (!refresh && session) {
     return session
@@ -93,7 +63,6 @@ async function fetchSession(refresh = false): Promise<SessionResponse> {
     if (!data?.csrfToken) {
       throw new Error("会话响应格式不正确")
     }
-    updateTurnstileVerification(data.turnstileVerifiedUntil, true)
     session = data
     return data
   })()
@@ -108,29 +77,6 @@ async function fetchSession(refresh = false): Promise<SessionResponse> {
 async function fetchCSRFToken(refresh = false): Promise<string> {
   const data = await fetchSession(refresh)
   return data.csrfToken
-}
-
-export async function getTurnstileConfig(): Promise<{
-  enabled: boolean
-  siteKey: string
-  verifiedUntil: number
-}> {
-  const data = await fetchSession()
-  return {
-    enabled: Boolean(data.turnstileEnabled),
-    siteKey: data.turnstileSiteKey ?? "",
-    verifiedUntil: turnstileVerifiedUntil,
-  }
-}
-
-export async function verifyTurnstileToken(turnstileToken: string): Promise<void> {
-  await postJSON<void>(
-    "/api/turnstile/verify",
-    {},
-    {
-      turnstileToken,
-    }
-  )
 }
 
 export async function postJSON<T>(
@@ -184,9 +130,6 @@ async function postWithCSRF(
   if (!formBody) {
     headers["Content-Type"] = "application/json"
   }
-  if (options.turnstileToken) {
-    headers["X-Turnstile-Token"] = options.turnstileToken
-  }
 
   const resp = await fetch(path, {
     method: "POST",
@@ -195,15 +138,6 @@ async function postWithCSRF(
     body: formBody ? body : JSON.stringify(body),
     signal: options.signal,
   })
-  const verifiedUntil = resp.headers.get(turnstileVerifiedHeader)
-  updateTurnstileVerification(verifiedUntil)
-  if (
-    resp.status === 403 &&
-    !verifiedUntil &&
-    resp.headers.get(csrfErrorHeader) !== "1"
-  ) {
-    turnstileVerifiedUntil = 0
-  }
 
   if (
     resp.status === 403 &&

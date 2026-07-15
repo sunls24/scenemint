@@ -6,7 +6,6 @@ import { initialLanguage, persistLanguage } from "./preferences"
 import { useCreationDraft } from "./useCreationDraft"
 import { useHistoryPreview } from "./useHistoryPreview"
 import { useQuota } from "./useQuota"
-import { useTurnstile } from "./useTurnstile"
 import { isActive, type TaskResponse } from "./utils"
 import { archiveCurrentAndSet, type ImageHistory } from "@/lib/history"
 import { postForm, postJSON } from "@/lib/http"
@@ -34,8 +33,7 @@ export function useImageGeneratorController() {
     size: string
   } | null>(null)
   const t = copy[language]
-  const turnstile = useTurnstile()
-  const draft = useCreationDraft(t, turnstile.ensureVerified)
+  const draft = useCreationDraft(t)
   const historyPreview = useHistoryPreview(t)
   const {
     fingerprint,
@@ -46,9 +44,7 @@ export function useImageGeneratorController() {
     checkIn,
     retryQuota,
     applyRemainingCredits,
-  } = useQuota(t, {
-    ensureTurnstileVerified: turnstile.ensureVerified,
-  })
+  } = useQuota(t)
 
   const currentActive = Boolean(
     historyPreview.currentTask && isActive(historyPreview.currentTask)
@@ -105,7 +101,6 @@ export function useImageGeneratorController() {
     setSubmittingPreview({ prompt: submittedPrompt, size: draft.size })
     setLoading(true)
     try {
-      await turnstile.ensureVerified()
       const data = draft.referenceFile
         ? await postForm<TaskResponse>(
             "/api/images/generate",
@@ -171,7 +166,6 @@ export function useImageGeneratorController() {
     quotaLoading,
     quotaError,
     signingIn,
-    turnstile,
     promptInputRef: draft.promptInputRef,
     referenceInputRef: draft.referenceInputRef,
     previewIndex: historyPreview.previewIndex,
