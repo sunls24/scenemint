@@ -4,6 +4,7 @@ import (
 	"scenemint/internal/config"
 	"scenemint/internal/handler"
 	"scenemint/internal/image"
+	"scenemint/internal/poll"
 	"scenemint/internal/quota"
 	"scenemint/internal/security"
 
@@ -11,8 +12,9 @@ import (
 	"github.com/sunls24/gox/server"
 )
 
-func Register(e *echo.Echo, imageClient *image.Client, quotaStore *quota.Store, cfg config.Security) {
+func Register(e *echo.Echo, imageClient *image.Client, quotaStore *quota.Store, pollStore *poll.Store, cfg config.Security) {
 	sec := security.New(cfg)
+	e.GET("/api/vote", server.WrapResp(pollStore.Stats))
 	g := e.Group("/api")
 	g.Use(sec.SourceGuard())
 	g.GET("/session", sec.Session)
@@ -26,6 +28,7 @@ func Register(e *echo.Echo, imageClient *image.Client, quotaStore *quota.Store, 
 	}
 	protected.POST("/quota/status", server.Wrap(quotaStore.Status), security.BodyLimit(), sec.CSRF())
 	protected.POST("/quota/check-in", server.Wrap(quotaStore.CheckIn), security.BodyLimit(), sec.CSRF())
+	protected.POST("/vote", server.Wrap(pollStore.Vote), security.BodyLimit(), sec.CSRF())
 	protected.POST("/prompts/enhance", imageClient.EnhancePrompt, security.BodyLimit(), sec.CSRF())
 	protected.POST("/images/generate", server.WrapReplyResp(imageClient.GenerateReply), security.BodyLimit(), sec.CSRF())
 	protected.GET("/images/tasks/:id", server.WrapResp(imageClient.Task))

@@ -4,6 +4,7 @@ import { ArrowUpRightIcon, LanguagesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 import type { ImageGeneratorCopy, Language } from "./copy"
+import { PaidSiteSupport } from "./PaidSiteSupport"
 
 export type RelatedLinks = {
   divination: string
@@ -62,6 +63,8 @@ export function BrandHeader({
       </div>
 
       <div className="scene-topbar-actions flex min-w-0 flex-wrap items-center gap-1.5 md:justify-end">
+        <PaidSiteSupport t={t} />
+
         <nav
           className="scene-related-nav mr-auto flex items-center gap-1 md:mr-1"
           aria-label={t.relatedLinksLabel}

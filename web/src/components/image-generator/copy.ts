@@ -13,6 +13,14 @@ export const copy = {
     appDescription: "Turn imagination into images",
     relatedLinksLabel: "Related products",
     controlsTitle: "Create",
+    contentPolicyNotice:
+      "Recent NSFW requests are making maintenance difficult. Please use responsibly while it lasts.",
+    paidSiteSupport: {
+      question: "We're considering a paid version. Would you use it?",
+      action: "I would",
+      thanks: "Thanks for your support",
+      failed: "Unable to record your support",
+    },
     language: "中文",
     relatedLinks: {
       divination: "AI Divination",
@@ -114,6 +122,14 @@ export const copy = {
     appDescription: "把想象变成画面",
     relatedLinksLabel: "相关产品",
     controlsTitle: "开始创作",
+    contentPolicyNotice:
+      "近期 NSFW 请求较多，维护困难，且用且珍惜。",
+    paidSiteSupport: {
+      question: "我们在考虑推出付费版，你会使用吗？",
+      action: "会",
+      thanks: "感谢支持",
+      failed: "暂时无法记录",
+    },
     language: "English",
     relatedLinks: {
       divination: "AI 算卦",

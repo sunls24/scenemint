@@ -375,6 +375,35 @@
   background: var(--scene-paper-strong);
 }
 
+.scene-header-notice {
+  background: oklch(0.955 0.035 82);
+  color: oklch(0.38 0.055 68);
+}
+
+.scene-header-notice svg {
+  color: oklch(0.53 0.105 67);
+}
+
+.scene-support-button {
+  position: relative;
+}
+
+.scene-support-button:hover:not(:disabled),
+.scene-support-button:focus-visible {
+  background: oklch(0.9 0.055 78);
+  color: oklch(0.32 0.06 66);
+}
+
+.scene-support-button:active:not(:disabled) {
+  background: oklch(0.875 0.065 76);
+}
+
+.scene-support-button::before {
+  position: absolute;
+  inset: -0.35rem;
+  content: "";
+}
+
 .scene-quota-icon {
   border: 1px solid oklch(0.875 0.018 145);
   background: oklch(0.995 0.005 105);
@@ -727,6 +756,10 @@
     grid-template-columns: repeat(4, minmax(0, auto));
     justify-content: space-around;
     gap: 0.25rem;
+  }
+
+  .scene-header-notice {
+    grid-column: 1 / -1;
   }
 
   .scene-related-nav {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"scenemint/internal/config"
 	"scenemint/internal/image"
+	"scenemint/internal/poll"
 	"scenemint/internal/quota"
 	"scenemint/internal/router"
 	"scenemint/internal/security"
@@ -35,6 +36,11 @@ func (app App) Run() error {
 		return err
 	}
 	defer quotaStore.Close()
+	pollStore, err := poll.Open(poll.DefaultPath)
+	if err != nil {
+		return err
+	}
+	defer pollStore.Close()
 
 	imageClient := image.NewClient(cfg, quotaStore)
 
@@ -42,6 +48,6 @@ func (app App) Run() error {
 		srv.Echo.Logger = logger
 		srv.Echo.Use(security.Headers())
 		srv.Echo.Static("/", "web/dist")
-		router.Register(srv.Echo, imageClient, quotaStore, cfg.Security)
+		router.Register(srv.Echo, imageClient, quotaStore, pollStore, cfg.Security)
 	})
 }
